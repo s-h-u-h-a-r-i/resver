@@ -11,7 +11,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx . && prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "gen:types": "supabase gen types typescript --local > src/shared/database.types.ts"
   },
   "keywords": [],
   "author": {
