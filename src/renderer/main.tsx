@@ -26,8 +26,14 @@
  * ```
  */
 
+import { render } from 'solid-js/web';
+import App from './App';
 import '../index.css';
 
-console.log(
-  '👋 This message is being logged by "renderer.ts", included via Vite',
-);
+console.log('👋 This message is being logged by "main.tsx", included via Vite');
+
+const root = document.getElementById('app');
+
+if (root) {
+  render(() => <App />, root);
+}

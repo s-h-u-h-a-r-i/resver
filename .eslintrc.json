@@ -11,7 +11,13 @@
     "plugin:import/recommended",
     "plugin:import/electron",
     "plugin:import/typescript",
+    "plugin:solid/typescript",
     "prettier"
   ],
-  "parser": "@typescript-eslint/parser"
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  }
 }
