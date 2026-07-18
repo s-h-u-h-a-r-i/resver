@@ -27,7 +27,7 @@
  */
 
 import { render } from 'solid-js/web';
-import App from './App';
+import App from './app.component';
 import './styles/global.scss';
 
 console.log('👋 This message is being logged by "main.tsx", included via Vite');

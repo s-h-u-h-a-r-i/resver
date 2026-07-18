@@ -1,0 +1,28 @@
+.root {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-tint);
+  border-radius: var(--r-sm);
+  padding: 3px;
+}
+
+.btn {
+  flex: 1;
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 6px 4px;
+  border-radius: var(--r-xs);
+  font-family: var(--sans);
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    color: var(--ink);
+  }
+}
+
+.on {
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}

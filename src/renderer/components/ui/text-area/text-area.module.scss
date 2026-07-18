@@ -1,0 +1,26 @@
+.root {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  font-size: 15px;
+  transition: border-color var(--dur-fast);
+  resize: vertical;
+  min-height: 74px;
+  line-height: 1.55;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+
+  &:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  &::placeholder {
+    color: var(--ink-3);
+  }
+}

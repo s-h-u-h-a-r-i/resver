@@ -36,6 +36,7 @@
     "electron": "43.1.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-solid": "^0.14.5",
     "prettier": "^3.9.5",
@@ -48,6 +49,7 @@
     "@fontsource/inter": "^5.2.8",
     "@fontsource/source-serif-4": "^5.2.9",
     "electron-squirrel-startup": "^1.0.1",
+    "lucide-solid": "^1.25.0",
     "solid-js": "^1.9.14"
   }
 }
