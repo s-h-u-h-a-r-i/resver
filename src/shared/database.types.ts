@@ -34,7 +34,402 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      books: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          position: number
+          project_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position: number
+          project_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position?: number
+          project_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "books_project_id_user_id_fkey"
+            columns: ["project_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      characters: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          notes: string | null
+          project_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          project_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "characters_project_id_user_id_fkey"
+            columns: ["project_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      continuity_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          paragraph_id: string
+          supersedes_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          paragraph_id: string
+          supersedes_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          paragraph_id?: string
+          supersedes_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "continuity_notes_paragraph_id_user_id_fkey"
+            columns: ["paragraph_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "paragraphs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "continuity_notes_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: true
+            referencedRelation: "continuity_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      future_beat_continuity: {
+        Row: {
+          continuity_note_id: string
+          created_at: string
+          future_beat_id: string
+          user_id: string
+        }
+        Insert: {
+          continuity_note_id: string
+          created_at?: string
+          future_beat_id: string
+          user_id: string
+        }
+        Update: {
+          continuity_note_id?: string
+          created_at?: string
+          future_beat_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "future_beat_continuity_continuity_note_id_user_id_fkey"
+            columns: ["continuity_note_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "continuity_notes"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "future_beat_continuity_future_beat_id_user_id_fkey"
+            columns: ["future_beat_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "future_beats"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      future_beats: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "future_beats_project_id_user_id_fkey"
+            columns: ["project_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      paragraphs: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          position: number
+          scene_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position: number
+          scene_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position?: number
+          scene_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paragraphs_scene_id_user_id_fkey"
+            columns: ["scene_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scene_characters: {
+        Row: {
+          character_id: string
+          created_at: string
+          scene_id: string
+          user_id: string
+        }
+        Insert: {
+          character_id: string
+          created_at?: string
+          scene_id: string
+          user_id: string
+        }
+        Update: {
+          character_id?: string
+          created_at?: string
+          scene_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_characters_character_id_user_id_fkey"
+            columns: ["character_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "characters"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "scene_characters_scene_id_user_id_fkey"
+            columns: ["scene_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      scenes: {
+        Row: {
+          book_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          position: number
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+          word_count: number
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position: number
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+          word_count?: number
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          position?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          word_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenes_book_id_user_id_fkey"
+            columns: ["book_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      style_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "style_notes_project_id_user_id_fkey"
+            columns: ["project_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
