@@ -88,6 +88,29 @@
   line-height: 1.6;
   margin-top: 6px;
 }
+.beat-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.beat-link {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  padding: 3px 8px;
+  background: none;
+}
+button.beat-link {
+  cursor: pointer;
+}
+button.beat-link.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
 .cnote {
   padding: 15px 0;
   border-bottom: 1px solid var(--line);

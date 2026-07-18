@@ -12,12 +12,6 @@ projects.forEach((pr) =>
     });
   }),
 );
-// style rules (book-level) come from mock-data.js's STYLE map
-projects.forEach((pr) =>
-  pr.books.forEach((bk) => {
-    bk.styleRules = STYLE[bk.id] || [];
-  }),
-);
 function lastSceneOf(bk) {
   let idx = 0,
     best = -Infinity;
@@ -235,8 +229,8 @@ function closeAll() {
 }
 
 // ── panel cards: read-only by default; explicit edit mode uses real inputs ──
-let editing = { cast: -1, cont: -1, style: -1 }; // index of the card currently in edit mode
-let isNew = { cast: false, cont: false, style: false }; // …and whether it has ever been saved
+let editing = { cast: -1, cont: -1, style: -1, future: -1 }; // index of the card currently in edit mode
+let isNew = { cast: false, cont: false, style: false, future: false }; // …and whether it has ever been saved
 
 function input(cls, value, ph, onInput, multiline) {
   const el = document.createElement(multiline ? 'textarea' : 'input');
@@ -289,20 +283,20 @@ function addBtn(label, fn) {
   return b;
 }
 
-// BOOK-level reference panels — re-render whenever the book changes
+// PROJECT-level reference panels (cast, style, future beats) — re-render whenever the project changes
 function renderCast() {
   const el = document.getElementById('castList');
   el.innerHTML = '';
   el.appendChild(
     addBtn('New character', () => {
-      curBook().characters.push({ name: '', role: '', bio: '' });
-      editing.cast = curBook().characters.length - 1;
+      curProject().characters.push({ name: '', role: '', bio: '' });
+      editing.cast = curProject().characters.length - 1;
       isNew.cast = true;
       renderCast();
       el.querySelector('.fin')?.focus();
     }),
   );
-  curBook().characters.forEach((c, i) => {
+  curProject().characters.forEach((c, i) => {
     const d = document.createElement('div');
     d.className = 'fig';
     if (editing.cast === i) {
@@ -325,13 +319,13 @@ function renderCast() {
           () => {
             // Done — a blank new card was never really created, so don't keep it
             if (fresh && !c.name && !c.role && !c.bio)
-              curBook().characters.splice(i, 1);
+              curProject().characters.splice(i, 1);
             editing.cast = -1;
             isNew.cast = false;
             renderCast();
           },
           () => {
-            curBook().characters.splice(i, 1);
+            curProject().characters.splice(i, 1);
             editing.cast = -1;
             isNew.cast = false;
             renderCast();
@@ -360,7 +354,15 @@ function renderCont() {
   el.innerHTML = '';
   el.appendChild(
     addBtn('New continuity note', () => {
-      curBook().continuity.push({ title: '', body: '' });
+      // continuity_notes.paragraph_id is not-null — anchor every new note to
+      // the paragraph you were reading when you created it
+      curBook().continuity.push({
+        title: '',
+        body: '',
+        at: { s: cur.s, p: 0 },
+        where:
+          'Scene ' + String(cur.s + 1).padStart(2, '0') + ' · ¶' + (0 + 1),
+      });
       editing.cont = curBook().continuity.length - 1;
       isNew.cont = true;
       renderCont();
@@ -370,7 +372,7 @@ function renderCont() {
   curBook().continuity.forEach((c, i) => {
     const d = document.createElement('div');
     d.className = 'cnote' + (c.soft ? ' soft' : '');
-    if (c.at) d.dataset.at = c.at.s + '-' + c.at.p;
+    d.dataset.at = c.at.s + '-' + c.at.p;
     if (editing.cont === i) {
       const fresh = isNew.cont;
       const ct = document.createElement('div');
@@ -474,14 +476,14 @@ function renderStyle() {
   el.innerHTML = '';
   el.appendChild(
     addBtn('New style rule', () => {
-      curBook().styleRules.push({ title: '', content: '' });
-      editing.style = curBook().styleRules.length - 1;
+      curProject().styleRules.push({ title: '', content: '' });
+      editing.style = curProject().styleRules.length - 1;
       isNew.style = true;
       renderStyle();
       el.querySelector('.fin')?.focus();
     }),
   );
-  (curBook().styleRules || []).forEach((r, i) => {
+  (curProject().styleRules || []).forEach((r, i) => {
     const d = document.createElement('div');
     d.className = 'fig';
     if (editing.style === i) {
@@ -500,13 +502,13 @@ function renderStyle() {
         cardActions(
           () => {
             if (fresh && !r.title && !r.content)
-              curBook().styleRules.splice(i, 1);
+              curProject().styleRules.splice(i, 1);
             editing.style = -1;
             isNew.style = false;
             renderStyle();
           },
           () => {
-            curBook().styleRules.splice(i, 1);
+            curProject().styleRules.splice(i, 1);
             editing.style = -1;
             isNew.style = false;
             renderStyle();
@@ -530,17 +532,119 @@ function renderStyle() {
     el.appendChild(d);
   });
 }
-function loadBook() {
+// future_beats (project-level) can each link to one or more of this project's
+// continuity notes (future_beat_continuity), shown as toggleable chips while editing
+function allContinuityTitles() {
+  const out = [];
+  curProject().books.forEach((bk) =>
+    (bk.continuity || []).forEach((c) => {
+      if (c.title && !out.includes(c.title)) out.push(c.title);
+    }),
+  );
+  return out;
+}
+function renderFuture() {
+  const el = document.getElementById('futureList');
+  el.innerHTML = '';
+  el.appendChild(
+    addBtn('New future beat', () => {
+      curProject().futureBeats.push({ title: '', content: '', continuity: [] });
+      editing.future = curProject().futureBeats.length - 1;
+      isNew.future = true;
+      renderFuture();
+      el.querySelector('.fin')?.focus();
+    }),
+  );
+  (curProject().futureBeats || []).forEach((r, i) => {
+    const d = document.createElement('div');
+    d.className = 'fig';
+    if (editing.future === i) {
+      const fresh = isNew.future;
+      d.appendChild(input('', r.title, 'Beat', (v) => (r.title = v)));
+      d.appendChild(
+        input(
+          'ta',
+          r.content,
+          'What has to happen, and why does it matter?',
+          (v) => (r.content = v),
+          true,
+        ),
+      );
+      const titles = allContinuityTitles();
+      if (titles.length) {
+        const chips = document.createElement('div');
+        chips.className = 'beat-links';
+        titles.forEach((t) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'beat-link' + (r.continuity.includes(t) ? ' on' : '');
+          chip.textContent = t;
+          chip.addEventListener('click', () => {
+            const idx = r.continuity.indexOf(t);
+            if (idx >= 0) r.continuity.splice(idx, 1);
+            else r.continuity.push(t);
+            renderFuture();
+          });
+          chips.appendChild(chip);
+        });
+        d.appendChild(chips);
+      }
+      d.appendChild(
+        cardActions(
+          () => {
+            if (fresh && !r.title && !r.content)
+              curProject().futureBeats.splice(i, 1);
+            editing.future = -1;
+            isNew.future = false;
+            renderFuture();
+          },
+          () => {
+            curProject().futureBeats.splice(i, 1);
+            editing.future = -1;
+            isNew.future = false;
+            renderFuture();
+          },
+          fresh,
+          'Delete beat',
+        ),
+      );
+    } else {
+      d.innerHTML =
+        `<div class="fn">${esc(r.title) || '<span style="color:var(--ink-3)">Untitled beat</span>'}</div>` +
+        `<div class="fb">${esc(r.content)}</div>` +
+        (r.continuity.length
+          ? `<div class="beat-links">${r.continuity.map((t) => `<span class="beat-link">${esc(t)}</span>`).join('')}</div>`
+          : '');
+      d.appendChild(
+        editBtn(() => {
+          editing.future = i;
+          isNew.future = false;
+          renderFuture();
+        }),
+      );
+    }
+    el.appendChild(d);
+  });
+}
+// PROJECT-level panels re-render whenever the project changes
+function loadProject() {
   renderCast();
-  renderCont();
   renderStyle();
+  renderFuture();
+  document.getElementById('projectName').textContent = curProject().name;
+}
+// BOOK-level panels re-render whenever the book changes
+function loadBook() {
+  renderCont();
   document.getElementById('bookTitle').textContent = curBook().name;
 }
 
 function goTo(p, b, s) {
-  const bookChanged = p !== cur.p || b !== cur.b;
+  const projectChanged = p !== cur.p;
+  const bookChanged = projectChanged || b !== cur.b;
   cur.p = p;
   cur.b = b;
+  if (projectChanged) loadProject();
   if (bookChanged) loadBook();
   render(s);
   closeAll();
@@ -577,17 +681,12 @@ const sceneSearch = document.getElementById('sceneSearch'),
 const pad = (n) => String(n + 1).padStart(2, '0');
 const wordCountOf = (s) =>
   s.paras.join(' ').trim().split(/\s+/).filter(Boolean).length;
+// scenes.status is constrained to draft | revised | final
 const statusText = (s) =>
-  ({
-    done: 'done',
-    drafting: 'drafting',
-    outline: 'outline',
-    empty: 'empty',
-  })[s.status] || 'draft';
+  ({ draft: 'draft', revised: 'revised', final: 'final' })[s.status] ||
+  'draft';
 const sceneSub = (s) =>
-  s.status === 'empty' || s.status === 'outline'
-    ? statusText(s)
-    : wordCountOf(s).toLocaleString() + ' words · ' + statusText(s);
+  wordCountOf(s).toLocaleString() + ' words · ' + statusText(s);
 
 function row(parent, o) {
   const r = document.createElement('div');
@@ -712,7 +811,7 @@ function renderScenes() {
       sceneSearch.value = '';
       curBook().scenes.push({
         title: 'Untitled scene',
-        status: 'empty',
+        status: 'draft',
         paras: [''],
         updated: Date.now(),
       });
@@ -793,13 +892,11 @@ function renderBooks() {
       curProject().books.push({
         id: 'b' + Date.now(),
         name: '',
-        characters: [],
         continuity: [],
-        styleRules: [],
         scenes: [
           {
             title: 'Untitled scene',
-            status: 'empty',
+            status: 'draft',
             paras: [''],
             updated: Date.now(),
           },
@@ -828,7 +925,7 @@ function renderBooks() {
           ? () =>
               askConfirm(
                 'Delete this book?',
-                `“${bk.name}”, its ${bk.scenes.length} scene${bk.scenes.length === 1 ? '' : 's'}, cast, continuity and style rules will be permanently deleted. This can’t be undone.`,
+                `“${bk.name}” and its ${bk.scenes.length} scene${bk.scenes.length === 1 ? '' : 's'} — plus any continuity notes anchored to them — will be permanently deleted. This can’t be undone.`,
                 () => deleteBook(bi),
               )
           : null,
@@ -893,17 +990,18 @@ function renderProjects() {
       projects.push({
         id: 'p' + Date.now(),
         name: '',
+        characters: [],
+        styleRules: [],
+        futureBeats: [],
         books: [
           {
             id: 'b' + Date.now(),
             name: 'Untitled book',
-            characters: [],
             continuity: [],
-            styleRules: [],
             scenes: [
               {
                 title: 'Untitled scene',
-                status: 'empty',
+                status: 'draft',
                 paras: [''],
                 updated: Date.now(),
               },
@@ -937,7 +1035,7 @@ function renderProjects() {
           ? () =>
               askConfirm(
                 'Delete this project?',
-                `“${pr.name}” and all ${pr.books.length} book${pr.books.length === 1 ? '' : 's'} inside it will be permanently deleted. This can’t be undone.`,
+                `“${pr.name}”, all ${pr.books.length} book${pr.books.length === 1 ? '' : 's'} inside it, and its cast, style rules and future beats will be permanently deleted. This can’t be undone.`,
                 () => deleteProject(pi),
               )
           : null,
@@ -974,6 +1072,7 @@ function deleteProject(pi) {
     cur.p = Math.min(pi, projects.length - 1);
     const t = lastOfProject(curProject());
     cur.b = t.b;
+    loadProject();
     loadBook();
     render(t.s);
   } else if (cur.p > pi) {
@@ -1213,5 +1312,6 @@ document.querySelectorAll('[data-icon]').forEach((el) => {
   el.innerHTML = icon(el.dataset.icon, +el.dataset.size || 16);
 });
 
+loadProject();
 loadBook();
 render(lastSceneOf(curBook()));
