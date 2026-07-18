@@ -7,6 +7,9 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
+    "web:dev": "vite --config vite.web.config.ts",
+    "web:build": "vite build --config vite.web.config.ts",
+    "web:preview": "vite preview --config vite.web.config.ts",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
@@ -43,6 +46,7 @@
     "sass": "^1.101.0",
     "typescript": "~6.0.3",
     "vite": "^5.4.21",
+    "vite-plugin-pwa": "^1.3.0",
     "vite-plugin-solid": "^2.11.12"
   },
   "dependencies": {

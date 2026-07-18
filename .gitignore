@@ -90,3 +90,7 @@ typings/
 
 # Electron-Forge
 out/
+
+# Web/PWA build output
+dist-web/
+dev-dist/
