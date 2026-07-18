@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+  <head>
+    <!-- frame-runtime: iframe/parent-window bootstrap (postMessage nav, theming, capability shims). Vendor code — see frame-runtime.js -->
+    <!-- base is "./" for local viewing of this split preview; the live artifact embed sets this to its own /_f/<id>/ path -->
+    <base href="./" />
+    <script>
+      window.__FRAME_PREAMBLE = {
+        capabilities: {
+          downloads: 'downloads.BABDwU1K.js',
+          mcp: 'mcp.hoz5jxDa.js',
+          permissions: 'permissions.kVGugkJh.js',
+          self: 'self.D3u1zjZe.js',
+        },
+        transforms: '_transforms.DYk1Ltlh.js',
+        comments: '_comments.Dp6RDy7J.js',
+        translate: '_translate.DHzvAjkZ.js',
+      };
+    </script>
+    <script src="frame-runtime.js"></script>
+    <!-- /frame-runtime -->
+    <meta charset="utf8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="reset.css" />
+  </head>
+  <body>
+    <title>Resver — A Quiet Place to Write</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="canvas.css" />
+    <link rel="stylesheet" href="chrome.css" />
+    <link rel="stylesheet" href="drawer.css" />
+    <link rel="stylesheet" href="modals.css" />
+
+    <div class="whisper chrome">
+      <button class="book" id="bookTitle" title="Switch book">
+        The Salt Road
+      </button>
+      <div class="scene" id="whisperScene">Scene 09 · Marisol’s Bargain</div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="page" id="page">
+        <div class="scene-heading" id="heading">
+          <div class="eyebrow">Chapter Nine</div>
+          <h1
+            id="hTitle"
+            contenteditable="true"
+            spellcheck="false"
+            title="Write over the title to rename this scene">
+            Marisol’s Bargain
+          </h1>
+          <div class="rule"></div>
+        </div>
+        <!-- paras -->
+      </div>
+    </div>
+
+    <div class="dock chrome" id="dock">
+      <button id="projectBtn" class="proj-btn" title="Switch project">
+        <span class="ic" data-icon="folder" data-size="15"></span
+        ><span id="projectName">Tidewater Cycle</span>
+      </button>
+      <span class="divider"></span>
+      <button
+        class="nav-arrow"
+        id="prevScene"
+        title="Previous scene"
+        aria-label="Previous scene">
+        <span class="ic" data-icon="chevron-left" data-size="16"></span>
+      </button>
+      <button class="scenes-btn" id="openScenes">
+        <span class="ic" data-icon="book-open" data-size="15"></span>Scenes
+      </button>
+      <button
+        class="nav-arrow"
+        id="nextScene"
+        title="Next scene"
+        aria-label="Next scene">
+        <span class="ic" data-icon="chevron-right" data-size="16"></span>
+      </button>
+      <span class="divider"></span>
+      <button data-ref="cast">
+        <span class="ic" data-icon="users" data-size="15"></span>Cast
+      </button>
+      <button data-ref="cont">
+        <span class="ic" data-icon="list-checks" data-size="15"></span
+        >Continuity
+      </button>
+      <button data-ref="style">
+        <span class="ic" data-icon="scroll-text" data-size="15"></span>Style
+      </button>
+      <button class="scenes-btn" data-ref="ai">
+        <span class="ic" data-icon="sparkles" data-size="15"></span>Assistant
+      </button>
+      <span class="divider"></span>
+      <button
+        id="menuBtn"
+        title="Menu"
+        aria-haspopup="true"
+        aria-expanded="false">
+        <span class="ic" data-icon="ellipsis" data-size="18"></span>
+      </button>
+
+      <div class="menu" id="menu" role="menu">
+        <div class="m-brand">Resver</div>
+        <div class="m-acct">
+          <span class="m-av">T</span>
+          <span class="m-who"
+            ><b>Triston C.</b><i>triston.c.0186@gmail.com</i></span
+          >
+        </div>
+        <button class="mi" data-act="switch">
+          <span class="mic" data-icon="users" data-size="15"></span>Switch
+          account
+        </button>
+
+        <div class="m-sep"></div>
+        <div class="m-lab">Theme</div>
+        <div class="seg" id="themeSeg">
+          <button data-t="light">Light</button>
+          <button data-t="dark">Dark</button>
+          <button data-t="system">System</button>
+        </div>
+
+        <div class="m-sep"></div>
+        <button class="mi tog" data-pref="dim">
+          Dim other paragraphs<span class="sw"></span>
+        </button>
+        <button class="mi tog" data-pref="typewriter">
+          Typewriter scrolling<span class="sw"></span>
+        </button>
+
+        <div class="m-sep"></div>
+        <button
+          class="mi"
+          data-desktop
+          data-dtitle="Export lives in Resver for desktop"
+          data-dbody="Exporting writes files straight to a folder you choose — something the browser can’t do. Resver for desktop exports to Word, Markdown, and PDF.">
+          <span class="mic" data-icon="download" data-size="15"></span>Export
+          manuscript…<span class="m-badge">Desktop</span>
+        </button>
+
+        <div class="m-sep"></div>
+        <button class="mi danger" data-act="signout">
+          <span class="mic" data-icon="log-out" data-size="15"></span>Sign out
+        </button>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim"></div>
+
+    <!-- scenes popup — current book's scenes only -->
+    <div class="panel scene-picker" id="scenePicker">
+      <div class="nav-head">
+        <input
+          id="sceneSearch"
+          class="nav-search"
+          placeholder="Search scenes…" />
+      </div>
+      <div class="pop-actions" id="sceneAdd"></div>
+      <div class="pop-context" id="sceneCtx">—</div>
+      <div id="sceneList"></div>
+    </div>
+
+    <!-- book popup — books in the current project only -->
+    <div class="panel scene-picker" id="bookPicker">
+      <div class="nav-head">
+        <input id="bookSearch" class="nav-search" placeholder="Search books…" />
+      </div>
+      <div class="pop-actions" id="bookAdd"></div>
+      <div class="pop-context" id="bookCtx">—</div>
+      <div id="bookList"></div>
+    </div>
+
+    <!-- confirmation for destructive actions -->
+    <div class="panel confirm" id="confirmModal">
+      <h3 id="cfTitle">Delete?</h3>
+      <p id="cfBody"></p>
+      <div class="cf-actions">
+        <button class="cf-cancel" id="cfCancel">Cancel</button>
+        <button class="cf-danger" id="cfOk">Delete</button>
+      </div>
+    </div>
+
+    <!-- desktop-only feature prompt -->
+    <div class="panel desk-modal" id="deskModal">
+      <div class="dm-ic">
+        <span class="ic" data-icon="download" data-size="22"></span>
+      </div>
+      <h3 id="dmTitle">This lives in Resver for desktop</h3>
+      <p id="dmBody"></p>
+      <div class="dm-actions">
+        <button class="dm-primary">Get Resver for desktop</button>
+        <button class="dm-ghost" id="dmClose">Not now</button>
+      </div>
+    </div>
+
+    <!-- project popup -->
+    <div class="panel scene-picker" id="projectPicker">
+      <div class="nav-head">
+        <input
+          id="projectSearch"
+          class="nav-search"
+          placeholder="Search projects…" />
+      </div>
+      <div class="pop-actions" id="projectAdd"></div>
+      <div class="pop-context">All projects</div>
+      <div id="projectList"></div>
+    </div>
+
+    <!-- reference drawer (side panel, prose stays visible) -->
+    <div class="panel drawer" id="drawer">
+      <div class="dtabs">
+        <button class="active" data-tab="cast">
+          <span class="ic" data-icon="users" data-size="15"></span>Cast
+        </button>
+        <button data-tab="cont">
+          <span class="ic" data-icon="list-checks" data-size="15"></span
+          >Continuity
+        </button>
+        <button data-tab="style">
+          <span class="ic" data-icon="scroll-text" data-size="15"></span>Style
+        </button>
+        <button data-tab="ai">
+          <span class="ic" data-icon="sparkles" data-size="15"></span>AI
+        </button>
+        <button
+          class="close"
+          id="drawerClose"
+          title="Collapse panel"
+          aria-label="Collapse panel">
+          <span class="ic" data-icon="panel-right-close" data-size="18"></span>
+        </button>
+      </div>
+      <div class="dbody">
+        <div
+          class="dpanel scrollp active"
+          data-panel="cast"
+          id="castList"></div>
+        <div class="dpanel scrollp" data-panel="cont" id="contList"></div>
+        <div class="dpanel scrollp" data-panel="style" id="styleList"></div>
+        <div class="dpanel aipanel" data-panel="ai">
+          <div class="chat-scroll" id="chatScroll">
+            <div class="msg bot">
+              <div class="bubble">
+                I can help you tighten prose, catch continuity slips, or talk
+                through a scene. Select paragraphs to hand me the exact context,
+                then ask.
+              </div>
+            </div>
+            <div class="msg user">
+              <div class="bubble">
+                Does Elias come across too formal in this exchange?
+              </div>
+            </div>
+            <div class="msg bot">
+              <div class="bubble">
+                A little — his clipped “You know this.” already carries the
+                authority, so you can afford to loosen the narration around it.
+                Want two alternate lines?
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="ctx-head">
+              <span>Context</span><span class="ctx-n" id="ctxCount">0</span
+              ><span>selected paragraphs</span>
+            </div>
+            <div class="ctx-chips" id="ctxChips"></div>
+            <div class="input-row">
+              <textarea
+                id="aiInput"
+                rows="1"
+                placeholder="Ask about your scene…"></textarea>
+              <button class="send" id="aiSend" title="Send" aria-label="Send">
+                <span class="ic" data-icon="arrow-up" data-size="18"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="mock-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

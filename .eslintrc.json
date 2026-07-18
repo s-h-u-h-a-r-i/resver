@@ -1,4 +1,5 @@
 {
+  "ignorePatterns": ["preview-draft"],
   "env": {
     "browser": true,
     "es6": true,
