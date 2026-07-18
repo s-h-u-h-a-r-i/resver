@@ -96,3 +96,6 @@ out/
 # Web/PWA build output
 dist-web/
 dev-dist/
+
+# Local MCP server config
+.mcp.json
