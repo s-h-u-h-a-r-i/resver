@@ -42,6 +42,13 @@ function esc(s) {
     (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m],
   );
 }
+// the mark zone + margin are UI chrome, not prose — strip them before reading a paragraph's text
+function stripChrome(p) {
+  const c = p.cloneNode(true);
+  c.querySelector('.margin')?.remove();
+  c.querySelector('.mark')?.remove();
+  return c;
+}
 
 const page = document.getElementById('page'),
   heading = document.getElementById('heading'),
@@ -110,17 +117,14 @@ function wire(p, initial) {
   let hist = [initial],
     ptr = 0,
     timer = null;
-  // the mark zone + margin are UI, not prose — carry them across restores, keep them out of the text
+  // carry the mark zone + margin across restores, keep them out of the text
   function uiHTML() {
     const m = p.querySelector('.mark'),
       g = p.querySelector('.margin');
     return (m ? m.outerHTML : '') + (g ? g.outerHTML : '');
   }
   function getText() {
-    const c = p.cloneNode(true);
-    c.querySelector('.margin')?.remove();
-    c.querySelector('.mark')?.remove();
-    return c.textContent;
+    return stripChrome(p).textContent;
   }
   function draw() {
     p.querySelector('.undo').disabled = ptr <= 0;
@@ -283,24 +287,88 @@ function addBtn(label, fn) {
   return b;
 }
 
-// PROJECT-level reference panels (cast, style, future beats) — re-render whenever the project changes
-function renderCast() {
-  const el = document.getElementById('castList');
-  el.innerHTML = '';
-  el.appendChild(
-    addBtn('New character', () => {
-      curProject().characters.push({ name: '', role: '', bio: '' });
-      editing.cast = curProject().characters.length - 1;
-      isNew.cast = true;
-      renderCast();
-      el.querySelector('.fin')?.focus();
+// ── editable card list: shared scaffolding for cast / continuity / style /
+// future-beat panels. Each renders as a read-only card with an edit button,
+// or — while its index matches editing[flag] — an inline form with a
+// Done/Cancel|Delete action row. A never-saved ("fresh") card that's still
+// blank on Done is discarded rather than kept empty.
+function cardList({
+  container,
+  items,
+  flag,
+  className,
+  addLabel,
+  delLabel,
+  makeNew,
+  isBlank,
+  buildEdit,
+  buildView,
+  rerender,
+  onChange,
+}) {
+  container.innerHTML = '';
+  container.appendChild(
+    addBtn(addLabel, () => {
+      makeNew();
+      editing[flag] = items.length - 1;
+      isNew[flag] = true;
+      rerender();
+      container.querySelector('.fin')?.focus();
     }),
   );
-  curProject().characters.forEach((c, i) => {
+  items.forEach((item, i) => {
     const d = document.createElement('div');
-    d.className = 'fig';
-    if (editing.cast === i) {
-      const fresh = isNew.cast;
+    d.className = className(item);
+    if (editing[flag] === i) {
+      const fresh = isNew[flag];
+      buildEdit(item, d);
+      d.appendChild(
+        cardActions(
+          () => {
+            if (fresh && isBlank(item)) items.splice(i, 1);
+            editing[flag] = -1;
+            isNew[flag] = false;
+            rerender();
+            onChange?.();
+          },
+          () => {
+            items.splice(i, 1);
+            editing[flag] = -1;
+            isNew[flag] = false;
+            rerender();
+            onChange?.();
+          },
+          fresh,
+          delLabel,
+        ),
+      );
+    } else {
+      buildView(item, d);
+      d.appendChild(
+        editBtn(() => {
+          editing[flag] = i;
+          isNew[flag] = false;
+          rerender();
+        }),
+      );
+    }
+    container.appendChild(d);
+  });
+}
+
+// PROJECT-level reference panels (cast, style, future beats) — re-render whenever the project changes
+function renderCast() {
+  cardList({
+    container: document.getElementById('castList'),
+    items: curProject().characters,
+    flag: 'cast',
+    className: () => 'fig',
+    addLabel: 'New character',
+    delLabel: 'Delete character',
+    rerender: renderCast,
+    makeNew: () => curProject().characters.push({ name: '', role: '', bio: '' }),
+    isBlank: (c) => !c.name && !c.role && !c.bio,
+    buildEdit: (c, d) => {
       d.appendChild(input('', c.name, 'Name', (v) => (c.name = v)));
       d.appendChild(
         input('small', c.role, 'Role (Lead, Foil, Ally…)', (v) => (c.role = v)),
@@ -314,67 +382,37 @@ function renderCast() {
           true,
         ),
       );
-      d.appendChild(
-        cardActions(
-          () => {
-            // Done — a blank new card was never really created, so don't keep it
-            if (fresh && !c.name && !c.role && !c.bio)
-              curProject().characters.splice(i, 1);
-            editing.cast = -1;
-            isNew.cast = false;
-            renderCast();
-          },
-          () => {
-            curProject().characters.splice(i, 1);
-            editing.cast = -1;
-            isNew.cast = false;
-            renderCast();
-          },
-          fresh,
-          'Delete character',
-        ),
-      );
-    } else {
+    },
+    buildView: (c, d) => {
       d.innerHTML =
         `<div class="fn">${esc(c.name) || '<span style="color:var(--ink-3)">Unnamed</span>'} <span class="fr">${esc(c.role)}</span></div>` +
         `<div class="fb">${esc(c.bio)}</div>`;
-      d.appendChild(
-        editBtn(() => {
-          editing.cast = i;
-          isNew.cast = false;
-          renderCast();
-        }),
-      );
-    }
-    el.appendChild(d);
+    },
   });
 }
+// continuity_notes.paragraph_id is not-null — anchor every new note to the
+// paragraph you were reading when you created it
 function renderCont() {
-  const el = document.getElementById('contList');
-  el.innerHTML = '';
-  el.appendChild(
-    addBtn('New continuity note', () => {
-      // continuity_notes.paragraph_id is not-null — anchor every new note to
-      // the paragraph you were reading when you created it
+  cardList({
+    container: document.getElementById('contList'),
+    items: curBook().continuity,
+    flag: 'cont',
+    className: (c) => 'cnote' + (c.soft ? ' soft' : ''),
+    addLabel: 'New continuity note',
+    delLabel: 'Delete note',
+    rerender: renderCont,
+    onChange: refreshNotes,
+    makeNew: () =>
       curBook().continuity.push({
         title: '',
         body: '',
         at: { s: cur.s, p: 0 },
         where:
           'Scene ' + String(cur.s + 1).padStart(2, '0') + ' · ¶' + (0 + 1),
-      });
-      editing.cont = curBook().continuity.length - 1;
-      isNew.cont = true;
-      renderCont();
-      el.querySelector('.fin')?.focus();
-    }),
-  );
-  curBook().continuity.forEach((c, i) => {
-    const d = document.createElement('div');
-    d.className = 'cnote' + (c.soft ? ' soft' : '');
-    d.dataset.at = c.at.s + '-' + c.at.p;
-    if (editing.cont === i) {
-      const fresh = isNew.cont;
+      }),
+    isBlank: (c) => !c.title && !c.body,
+    buildEdit: (c, d) => {
+      d.dataset.at = c.at.s + '-' + c.at.p;
       const ct = document.createElement('div');
       ct.className = 'ct';
       ct.style.width = '100%';
@@ -384,28 +422,10 @@ function renderCont() {
       ct.appendChild(
         input('ta', c.body, 'Details…', (v) => (c.body = v), true),
       );
-      ct.appendChild(
-        cardActions(
-          () => {
-            if (fresh && !c.title && !c.body) curBook().continuity.splice(i, 1);
-            editing.cont = -1;
-            isNew.cont = false;
-            renderCont();
-            refreshNotes();
-          },
-          () => {
-            curBook().continuity.splice(i, 1);
-            editing.cont = -1;
-            isNew.cont = false;
-            renderCont();
-            refreshNotes();
-          },
-          fresh,
-          'Delete note',
-        ),
-      );
       d.appendChild(ct);
-    } else {
+    },
+    buildView: (c, d) => {
+      d.dataset.at = c.at.s + '-' + c.at.p;
       const dot = document.createElement('span');
       dot.className = 'm';
       d.appendChild(dot);
@@ -416,15 +436,7 @@ function renderCont() {
         `<div class="cn-body">${esc(c.body)}</div>` +
         (c.where ? `<span class="cw">${esc(c.where)}</span>` : '');
       d.appendChild(ct);
-      d.appendChild(
-        editBtn(() => {
-          editing.cont = i;
-          isNew.cont = false;
-          renderCont();
-        }),
-      );
-    }
-    el.appendChild(d);
+    },
   });
 }
 // keep the paragraph margin dots in sync without rebuilding paragraphs (which would wipe undo history)
@@ -472,22 +484,17 @@ function revealContinuity(sIdx, pIdx) {
   });
 }
 function renderStyle() {
-  const el = document.getElementById('styleList');
-  el.innerHTML = '';
-  el.appendChild(
-    addBtn('New style rule', () => {
-      curProject().styleRules.push({ title: '', content: '' });
-      editing.style = curProject().styleRules.length - 1;
-      isNew.style = true;
-      renderStyle();
-      el.querySelector('.fin')?.focus();
-    }),
-  );
-  (curProject().styleRules || []).forEach((r, i) => {
-    const d = document.createElement('div');
-    d.className = 'fig';
-    if (editing.style === i) {
-      const fresh = isNew.style;
+  cardList({
+    container: document.getElementById('styleList'),
+    items: curProject().styleRules,
+    flag: 'style',
+    className: () => 'fig',
+    addLabel: 'New style rule',
+    delLabel: 'Delete rule',
+    rerender: renderStyle,
+    makeNew: () => curProject().styleRules.push({ title: '', content: '' }),
+    isBlank: (r) => !r.title && !r.content,
+    buildEdit: (r, d) => {
       d.appendChild(input('', r.title, 'Rule', (v) => (r.title = v)));
       d.appendChild(
         input(
@@ -498,38 +505,12 @@ function renderStyle() {
           true,
         ),
       );
-      d.appendChild(
-        cardActions(
-          () => {
-            if (fresh && !r.title && !r.content)
-              curProject().styleRules.splice(i, 1);
-            editing.style = -1;
-            isNew.style = false;
-            renderStyle();
-          },
-          () => {
-            curProject().styleRules.splice(i, 1);
-            editing.style = -1;
-            isNew.style = false;
-            renderStyle();
-          },
-          fresh,
-          'Delete rule',
-        ),
-      );
-    } else {
+    },
+    buildView: (r, d) => {
       d.innerHTML =
         `<div class="fn">${esc(r.title) || '<span style="color:var(--ink-3)">Untitled rule</span>'}</div>` +
         `<div class="fb">${esc(r.content)}</div>`;
-      d.appendChild(
-        editBtn(() => {
-          editing.style = i;
-          isNew.style = false;
-          renderStyle();
-        }),
-      );
-    }
-    el.appendChild(d);
+    },
   });
 }
 // future_beats (project-level) can each link to one or more of this project's
@@ -544,22 +525,18 @@ function allContinuityTitles() {
   return out;
 }
 function renderFuture() {
-  const el = document.getElementById('futureList');
-  el.innerHTML = '';
-  el.appendChild(
-    addBtn('New future beat', () => {
-      curProject().futureBeats.push({ title: '', content: '', continuity: [] });
-      editing.future = curProject().futureBeats.length - 1;
-      isNew.future = true;
-      renderFuture();
-      el.querySelector('.fin')?.focus();
-    }),
-  );
-  (curProject().futureBeats || []).forEach((r, i) => {
-    const d = document.createElement('div');
-    d.className = 'fig';
-    if (editing.future === i) {
-      const fresh = isNew.future;
+  cardList({
+    container: document.getElementById('futureList'),
+    items: curProject().futureBeats,
+    flag: 'future',
+    className: () => 'fig',
+    addLabel: 'New future beat',
+    delLabel: 'Delete beat',
+    rerender: renderFuture,
+    makeNew: () =>
+      curProject().futureBeats.push({ title: '', content: '', continuity: [] }),
+    isBlank: (r) => !r.title && !r.content,
+    buildEdit: (r, d) => {
       d.appendChild(input('', r.title, 'Beat', (v) => (r.title = v)));
       d.appendChild(
         input(
@@ -589,41 +566,15 @@ function renderFuture() {
         });
         d.appendChild(chips);
       }
-      d.appendChild(
-        cardActions(
-          () => {
-            if (fresh && !r.title && !r.content)
-              curProject().futureBeats.splice(i, 1);
-            editing.future = -1;
-            isNew.future = false;
-            renderFuture();
-          },
-          () => {
-            curProject().futureBeats.splice(i, 1);
-            editing.future = -1;
-            isNew.future = false;
-            renderFuture();
-          },
-          fresh,
-          'Delete beat',
-        ),
-      );
-    } else {
+    },
+    buildView: (r, d) => {
       d.innerHTML =
         `<div class="fn">${esc(r.title) || '<span style="color:var(--ink-3)">Untitled beat</span>'}</div>` +
         `<div class="fb">${esc(r.content)}</div>` +
         (r.continuity.length
           ? `<div class="beat-links">${r.continuity.map((t) => `<span class="beat-link">${esc(t)}</span>`).join('')}</div>`
           : '');
-      d.appendChild(
-        editBtn(() => {
-          editing.future = i;
-          isNew.future = false;
-          renderFuture();
-        }),
-      );
-    }
-    el.appendChild(d);
+    },
   });
 }
 // PROJECT-level panels re-render whenever the project changes
@@ -687,6 +638,14 @@ const statusText = (s) =>
   'draft';
 const sceneSub = (s) =>
   wordCountOf(s).toLocaleString() + ' words · ' + statusText(s);
+
+function emptyRow(parent, text) {
+  const d = document.createElement('div');
+  d.className = 'ctx-empty';
+  d.style.padding = '14px 16px';
+  d.textContent = text;
+  parent.appendChild(d);
+}
 
 function row(parent, o) {
   const r = document.createElement('div');
@@ -854,13 +813,7 @@ function renderScenes() {
     });
     n++;
   });
-  if (!n) {
-    const d = document.createElement('div');
-    d.className = 'ctx-empty';
-    d.style.padding = '14px 16px';
-    d.textContent = 'No scenes match.';
-    sceneList.appendChild(d);
-  }
+  if (!n) emptyRow(sceneList, 'No scenes match.');
 }
 function deleteScene(si) {
   const bk = curBook();
@@ -872,13 +825,18 @@ function deleteScene(si) {
   }
   renderScenes();
 }
-function openScenesPopup(focus) {
+// shared by the Scenes / Books / Projects popups: reset the overlay, reset
+// the search box, render, and hand focus to the search field on request
+function openPicker(overlay, searchEl, renderFn, focus) {
   closeAll();
   scrim.classList.add('open');
-  scenePicker.classList.add('open');
-  sceneSearch.value = '';
-  renderScenes();
-  if (focus) setTimeout(() => sceneSearch.focus(), 40);
+  overlay.classList.add('open');
+  searchEl.value = '';
+  renderFn();
+  if (focus) setTimeout(() => searchEl.focus(), 40);
+}
+function openScenesPopup(focus) {
+  openPicker(scenePicker, sceneSearch, renderScenes, focus);
 }
 
 // Book popup — books in the current project only. Selecting a book resumes its last-edited scene.
@@ -948,13 +906,7 @@ function renderBooks() {
     if (pending.book === bi) startRename(r, o);
     n++;
   });
-  if (!n) {
-    const d = document.createElement('div');
-    d.className = 'ctx-empty';
-    d.style.padding = '14px 16px';
-    d.textContent = 'No books match.';
-    bookList.appendChild(d);
-  }
+  if (!n) emptyRow(bookList, 'No books match.');
 }
 function deleteBook(bi) {
   const pr = curProject();
@@ -970,12 +922,7 @@ function deleteBook(bi) {
   renderBooks();
 }
 function openBookPopup(focus) {
-  closeAll();
-  scrim.classList.add('open');
-  bookPicker.classList.add('open');
-  bookSearch.value = '';
-  renderBooks();
-  if (focus) setTimeout(() => bookSearch.focus(), 40);
+  openPicker(bookPicker, bookSearch, renderBooks, focus);
 }
 
 // Project popup — opened from the toolbar chip. Selecting a project resumes its last-edited scene.
@@ -1058,13 +1005,7 @@ function renderProjects() {
     if (pending.project === pi) startRename(r, o);
     n++;
   });
-  if (!n) {
-    const d = document.createElement('div');
-    d.className = 'ctx-empty';
-    d.style.padding = '14px 16px';
-    d.textContent = 'No projects match.';
-    projectList.appendChild(d);
-  }
+  if (!n) emptyRow(projectList, 'No projects match.');
 }
 function deleteProject(pi) {
   projects.splice(pi, 1);
@@ -1082,12 +1023,7 @@ function deleteProject(pi) {
   renderProjects();
 }
 function openProjectPopup(focus) {
-  closeAll();
-  scrim.classList.add('open');
-  projectPicker.classList.add('open');
-  projectSearch.value = '';
-  renderProjects();
-  if (focus) setTimeout(() => projectSearch.focus(), 40);
+  openPicker(projectPicker, projectSearch, renderProjects, focus);
 }
 
 sceneSearch.addEventListener('input', renderScenes);
@@ -1196,10 +1132,7 @@ drawPrefs();
 
 // paragraph selection → AI context chips
 function paraText(p) {
-  const c = p.cloneNode(true);
-  c.querySelector('.margin')?.remove();
-  c.querySelector('.mark')?.remove();
-  return c.textContent.trim();
+  return stripChrome(p).textContent.trim();
 }
 function renderChips() {
   const sel = [...document.querySelectorAll('.para.selected')];
