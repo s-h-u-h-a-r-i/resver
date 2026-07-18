@@ -254,6 +254,13 @@ body.focusline .para.active {
 .para .mark:hover::before {
   opacity: 1;
 }
+/* the paragraph you're currently in (or last were) — tracked so the
+     assistant always has a sense of "where you are", even once you've
+     clicked away to type a question */
+.para.active .mark::before {
+  opacity: 1;
+  background: var(--ink-3);
+}
 .para.selected .mark::before {
   opacity: 1;
   background: var(--accent);

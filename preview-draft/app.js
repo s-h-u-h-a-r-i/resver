@@ -80,6 +80,17 @@ function refreshLabels() {
   whisperScene.textContent = label + ' · ' + s.title;
 }
 
+// the paragraph you're currently in (or last were) — persists across blur,
+// e.g. while typing a question in the assistant, so it stays as context
+let activePara = null;
+function setActivePara(p) {
+  if (activePara === p) return;
+  activePara?.classList.remove('active');
+  activePara = p;
+  activePara?.classList.add('active');
+  renderChips();
+}
+
 function render(i) {
   cur.s = i;
   const s = curBook().scenes[i];
@@ -87,6 +98,7 @@ function render(i) {
   document.getElementById('prevScene').disabled = i <= 0;
   document.getElementById('nextScene').disabled =
     i >= curBook().scenes.length - 1;
+  activePara = null;
   page.querySelectorAll('.para').forEach((p) => p.remove());
   s.paras.forEach((text, idx) => {
     const p = document.createElement('p');
@@ -179,14 +191,13 @@ function wire(p, initial) {
       });
   }
   p.addEventListener('focus', () => {
-    p.classList.add('active');
+    setActivePara(p);
     if (prefs.dim) document.body.classList.add('focusline');
     if (prefs.typewriter)
       p.scrollIntoView({ block: 'center', behavior: 'smooth' });
     setMenu(false);
   });
   p.addEventListener('blur', () => {
-    p.classList.remove('active');
     document.body.classList.remove('focusline');
     commit();
   });
@@ -230,6 +241,7 @@ function closeAll() {
   document.body.classList.remove('panel-open');
   document.getElementById('deskModal').classList.remove('open');
   document.getElementById('confirmModal').classList.remove('open');
+  setRefMenu(false);
 }
 
 // ── panel cards: read-only by default; explicit edit mode uses real inputs ──
@@ -621,6 +633,31 @@ document
   .querySelectorAll('.dtabs button[data-tab]')
   .forEach((b) => b.addEventListener('click', () => openDrawer(b.dataset.tab)));
 document.getElementById('drawerClose').addEventListener('click', closeAll);
+
+// dock's "Reference" button — a small dropdown standing in for the four
+// panel shortcuts (cast/continuity/style/future beats) it collapses
+const refBtn = document.getElementById('refBtn'),
+  refMenu = document.getElementById('refMenu');
+function setRefMenu(open) {
+  refMenu.classList.toggle('open', open);
+  refBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+refBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setMenu(false);
+  setRefMenu(!refMenu.classList.contains('open'));
+});
+document
+  .querySelectorAll('.refmenu [data-ref]')
+  .forEach((b) => b.addEventListener('click', () => setRefMenu(false)));
+document.addEventListener('click', (e) => {
+  if (
+    refMenu.classList.contains('open') &&
+    !refMenu.contains(e.target) &&
+    !refBtn.contains(e.target)
+  )
+    setRefMenu(false);
+});
 
 // two popups: Scenes (current book) and Books (current project). Project selection is deferred.
 const sceneSearch = document.getElementById('sceneSearch'),
@@ -1065,6 +1102,7 @@ function setMenu(open) {
 }
 menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
+  setRefMenu(false);
   setMenu(!menu.classList.contains('open'));
 });
 document.addEventListener('click', (e) => {
@@ -1134,8 +1172,13 @@ drawPrefs();
 function paraText(p) {
   return stripChrome(p).textContent.trim();
 }
+// context sent to the assistant = every marked paragraph, plus the one
+// you're currently (or were last) in — even if you never explicitly marked it
 function renderChips() {
-  const sel = [...document.querySelectorAll('.para.selected')];
+  const marked = [...document.querySelectorAll('.para.selected')];
+  const current =
+    activePara && !marked.includes(activePara) ? activePara : null;
+  const sel = current ? [...marked, current] : marked;
   const wrap = document.getElementById('ctxChips');
   document.getElementById('ctxCount').textContent = sel.length;
   wrap.innerHTML = '';
@@ -1143,26 +1186,35 @@ function renderChips() {
     const d = document.createElement('div');
     d.className = 'ctx-empty';
     d.textContent =
-      'Nothing marked yet. Click the margin beside a paragraph to mark it as context.';
+      'Nothing marked yet. Click the margin beside a paragraph to mark it as context, or click into one to make it current.';
     wrap.appendChild(d);
     return;
   }
   sel.forEach((p) => {
+    const isCurrent = p === current;
     const chip = document.createElement('span');
-    chip.className = 'chip';
+    chip.className = 'chip' + (isCurrent ? ' current' : '');
     const t = document.createElement('span');
     t.className = 'ctxt';
     t.textContent = paraText(p);
-    const x = document.createElement('button');
-    x.className = 'cx';
-    x.type = 'button';
-    x.textContent = '×';
-    x.title = 'Remove from context';
-    x.addEventListener('click', () => {
-      p.classList.remove('selected');
-      renderChips();
-    });
-    chip.append(t, x);
+    chip.appendChild(t);
+    if (isCurrent) {
+      const tag = document.createElement('span');
+      tag.className = 'ctag';
+      tag.textContent = 'current';
+      chip.appendChild(tag);
+    } else {
+      const x = document.createElement('button');
+      x.className = 'cx';
+      x.type = 'button';
+      x.textContent = '×';
+      x.title = 'Remove from context';
+      x.addEventListener('click', () => {
+        p.classList.remove('selected');
+        renderChips();
+      });
+      chip.appendChild(x);
+    }
     wrap.appendChild(chip);
   });
 }
@@ -1188,14 +1240,14 @@ function sendMsg() {
   addBubble('user', v);
   aiInput.value = '';
   aiInput.style.height = 'auto';
-  const n = document.querySelectorAll('.para.selected').length;
+  const n = +document.getElementById('ctxCount').textContent || 0;
   const b = addBubble('bot', 'thinking…');
   b.classList.add('typing');
   setTimeout(() => {
     b.classList.remove('typing');
     b.textContent = n
-      ? `Reading the ${n} paragraph${n > 1 ? 's' : ''} you selected… (preview — the assistant isn’t wired up yet)`
-      : `Happy to help — select a paragraph or two so I can ground my answer in your text. (preview only)`;
+      ? `Reading the ${n} paragraph${n > 1 ? 's' : ''} in context… (preview — the assistant isn’t wired up yet)`
+      : `Happy to help — click into a paragraph or mark one so I can ground my answer in your text. (preview only)`;
     chatScroll.scrollTop = chatScroll.scrollHeight;
   }, 700);
 }

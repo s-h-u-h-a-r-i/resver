@@ -87,6 +87,21 @@ button svg {
   padding: 8px 7px;
 }
 
+/* Reference dropdown — cast/continuity/style/future beats collapsed under one dock button */
+.dock-item {
+  position: relative;
+  display: inline-flex;
+}
+.refmenu {
+  width: 190px;
+  right: auto;
+  left: 0;
+}
+#refBtn[aria-expanded='true'] {
+  background: var(--bg-tint);
+  color: var(--ink);
+}
+
 /* overflow menu — anchored to the dock, so it travels with it when a panel pushes the view */
 .menu {
   position: absolute;

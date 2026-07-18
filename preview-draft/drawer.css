@@ -16,10 +16,23 @@
 }
 .drawer .dtabs {
   display: flex;
-  gap: 18px;
+  align-items: flex-start;
+  gap: 8px;
   padding: 22px 18px 0 30px;
   border-bottom: 1px solid var(--line);
   flex: none;
+}
+.dtabs-scroll {
+  display: flex;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dtabs-scroll::-webkit-scrollbar {
+  display: none;
 }
 .drawer .dtabs button {
   background: none;
@@ -34,6 +47,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: none;
+  white-space: nowrap;
 }
 .drawer .dtabs button.active {
   color: var(--ink);
@@ -338,6 +353,17 @@ button.beat-link.on {
 .chip .cx:hover {
   background: var(--line);
   color: var(--ink);
+}
+/* the auto-included "current paragraph" chip — not pinned, so no remove button,
+     just a quiet tag to explain why it's there */
+.chip.current {
+  border-style: dashed;
+  padding-right: 9px;
+}
+.chip .ctag {
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 .input-row {
   display: flex;

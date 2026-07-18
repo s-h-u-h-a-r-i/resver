@@ -79,19 +79,33 @@
         <span class="ic" data-icon="chevron-right" data-size="16"></span>
       </button>
       <span class="divider"></span>
-      <button data-ref="cast">
-        <span class="ic" data-icon="users" data-size="15"></span>Cast
-      </button>
-      <button data-ref="cont">
-        <span class="ic" data-icon="list-checks" data-size="15"></span
-        >Continuity
-      </button>
-      <button data-ref="style">
-        <span class="ic" data-icon="scroll-text" data-size="15"></span>Style
-      </button>
-      <button data-ref="future">
-        <span class="ic" data-icon="flag" data-size="15"></span>Future beats
-      </button>
+      <div class="dock-item">
+        <button
+          id="refBtn"
+          aria-haspopup="true"
+          aria-expanded="false"
+          title="Cast, continuity, style & future beats">
+          <span class="ic" data-icon="layers" data-size="15"></span>Reference
+          <span class="ic" data-icon="chevron-down" data-size="13"></span>
+        </button>
+        <div class="menu refmenu" id="refMenu" role="menu">
+          <button class="mi" data-ref="cast">
+            <span class="mic" data-icon="users" data-size="15"></span>Cast
+          </button>
+          <button class="mi" data-ref="cont">
+            <span class="mic" data-icon="list-checks" data-size="15"></span
+            >Continuity
+          </button>
+          <button class="mi" data-ref="style">
+            <span class="mic" data-icon="scroll-text" data-size="15"></span
+            >Style
+          </button>
+          <button class="mi" data-ref="future">
+            <span class="mic" data-icon="flag" data-size="15"></span>Future
+            beats
+          </button>
+        </div>
+      </div>
       <button class="scenes-btn" data-ref="ai">
         <span class="ic" data-icon="sparkles" data-size="15"></span>Assistant
       </button>
@@ -214,22 +228,25 @@
     <!-- reference drawer (side panel, prose stays visible) -->
     <div class="panel drawer" id="drawer">
       <div class="dtabs">
-        <button class="active" data-tab="cast">
-          <span class="ic" data-icon="users" data-size="15"></span>Cast
-        </button>
-        <button data-tab="cont">
-          <span class="ic" data-icon="list-checks" data-size="15"></span
-          >Continuity
-        </button>
-        <button data-tab="style">
-          <span class="ic" data-icon="scroll-text" data-size="15"></span>Style
-        </button>
-        <button data-tab="future">
-          <span class="ic" data-icon="flag" data-size="15"></span>Future
-        </button>
-        <button data-tab="ai">
-          <span class="ic" data-icon="sparkles" data-size="15"></span>AI
-        </button>
+        <div class="dtabs-scroll">
+          <button class="active" data-tab="cast">
+            <span class="ic" data-icon="users" data-size="15"></span>Cast
+          </button>
+          <button data-tab="cont">
+            <span class="ic" data-icon="list-checks" data-size="15"></span
+            >Continuity
+          </button>
+          <button data-tab="style">
+            <span class="ic" data-icon="scroll-text" data-size="15"></span
+            >Style
+          </button>
+          <button data-tab="future">
+            <span class="ic" data-icon="flag" data-size="15"></span>Future
+          </button>
+          <button data-tab="ai">
+            <span class="ic" data-icon="sparkles" data-size="15"></span>AI
+          </button>
+        </div>
         <button
           class="close"
           id="drawerClose"
