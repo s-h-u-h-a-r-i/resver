@@ -1,0 +1,51 @@
+.root {
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px; // TODO: should we be using rem insteads
+  text-align: center;
+}
+
+.brand {
+  font-style: italic;
+  font-size: 15px;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+.error {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--danger);
+  margin: 0;
+}
+
+.submit {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  transition: opacity var(--dur-fast);
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
