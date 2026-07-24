@@ -1,7 +1,7 @@
-import { UpdateSpec } from 'dexie';
+import { UpdateSpec, type InsertType } from 'dexie';
 
 import { omitUndefined } from '@/shared/utils/omit-undefined';
-import { type AppDatabase, db } from '../client';
+import { db, type AppDatabase } from '../client';
 import type { LocalProject } from '../types';
 
 export type ProjectRepository = ReturnType<typeof createProjectRepository>;
@@ -30,7 +30,7 @@ function createProjectRepository(db: AppDatabase) {
 
     create(input: CreateProjectInput) {
       const now = new Date().toISOString();
-      const project: LocalProject = {
+      const project: InsertType<LocalProject, 'id'> = {
         id: crypto.randomUUID(),
         title: input.title,
         description: null,

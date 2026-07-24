@@ -2,7 +2,7 @@ export interface LocalParagraph {
   id: string;
   scene_id: string;
   content: string;
-  position: number;
+  position: string;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

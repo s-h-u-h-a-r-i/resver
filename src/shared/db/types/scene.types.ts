@@ -2,7 +2,7 @@ export interface LocalScene {
   id: string;
   book_id: string;
   title: string;
-  position: number;
+  position: string;
   status: 'draft' | 'revised' | 'final';
   word_count: number;
   deleted_at: string | null;
