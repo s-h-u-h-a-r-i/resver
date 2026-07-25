@@ -1,17 +1,18 @@
 import { UpdateSpec, type InsertType } from 'dexie';
 
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import type { SnakeToCamelCaseKeys } from '@/shared/utils/types';
 import { db, type AppDatabase } from '../client';
 import type { LocalProject } from '../types';
 
 type ProjectInsert = InsertType<LocalProject, 'id'>;
 
-export interface CreateProjectInput {
-  title: string;
-}
+type LocalProjectCamel = SnakeToCamelCaseKeys<LocalProject>;
+
+export type CreateProjectInput = Pick<LocalProjectCamel, 'title'>;
 
 export type UpdateProjectInput = Partial<
-  Pick<LocalProject, 'title' | 'description'>
+  Pick<LocalProjectCamel, 'title' | 'description'>
 >;
 
 export const projectRepository = createProjectRepository(db);

@@ -1,18 +1,22 @@
 import type { InsertType, UpdateSpec } from 'dexie';
 
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import type { SnakeToCamelCaseKeys } from '@/shared/utils/types';
 import { db, type AppDatabase } from '../client';
 import type { LocalBook } from '../types';
 
 type bookInsert = InsertType<LocalBook, 'id'>;
 
-export interface CreateBookInput {
-  projectId: string;
-  title: string;
-  position: string;
-}
+type LocalBookCamel = SnakeToCamelCaseKeys<LocalBook>;
 
-export type UpdateBookInput = Partial<Pick<LocalBook, 'title' | 'position'>>;
+export type CreateBookInput = Pick<
+  LocalBookCamel,
+  'projectId' | 'title' | 'position'
+>;
+
+export type UpdateBookInput = Partial<
+  Pick<LocalBookCamel, 'title' | 'position'>
+>;
 
 export const bookRepository = createBookRepository(db);
 
