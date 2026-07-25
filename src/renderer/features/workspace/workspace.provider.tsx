@@ -13,7 +13,7 @@ import type * as DbTypes from '@/shared/db';
 import { useBooks } from '../books';
 import { useProjects } from '../projects';
 import { useScenes } from '../scenes';
-import { WorkspaceLoading } from './ui/workspace-loading';
+import { WorkspaceLoading } from './ui/workspace-loading.component';
 
 interface WorkspaceContextValue {
   selectedScene: Accessor<DbTypes.LocalScene>;
