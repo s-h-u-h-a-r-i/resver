@@ -22,26 +22,24 @@ export const ProjectsProvider: ParentComponent = (props) => {
     initial: [],
   });
 
-  const createProject = async (input: CreateProjectInput) => {
-    await projectRepository.create(input);
-  };
+  const value: ProjectsContextValue = {
+    projects,
 
-  const updateProject = async (id: string, input: UpdateProjectInput) => {
-    await projectRepository.update(id, input);
-  };
+    async createProject(input) {
+      await projectRepository.create(input);
+    },
 
-  const deleteProject = async (id: string) => {
-    await projectRepository.softDelete(id);
+    async updateProject(id, input) {
+      await projectRepository.update(id, input);
+    },
+
+    async deleteProject(id) {
+      await projectRepository.softDelete(id);
+    },
   };
 
   return (
-    <ProjectsContext.Provider
-      value={{
-        projects,
-        createProject,
-        updateProject,
-        deleteProject,
-      }}>
+    <ProjectsContext.Provider value={value}>
       {props.children}
     </ProjectsContext.Provider>
   );

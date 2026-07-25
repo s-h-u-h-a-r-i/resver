@@ -22,7 +22,7 @@ interface BooksContextValue {
     input: Omit<UpdateBookInput, 'position'>,
   ): Promise<void>;
   moveBook(id: string, nextBookId?: string): Promise<void>;
-  softDeleteBook(id: string): Promise<void>;
+  deleteBook(id: string): Promise<void>;
 }
 
 const BooksContext = createContext<BooksContextValue>();
@@ -30,58 +30,52 @@ const BooksContext = createContext<BooksContextValue>();
 export const BooksProvider: ParentComponent = (props) => {
   const books = createLiveQuery(bookRepository.list, { initial: [] });
 
-  const createBook = async (projectId: string, title: string) => {
-    const projectBooks = await bookRepository.listByProject(projectId);
-    const position = generateKeyBetween(
-      projectBooks[projectBooks.length - 1]?.position,
-      undefined,
-    );
-    await bookRepository.create({ projectId, title, position });
-  };
+  const value: BooksContextValue = {
+    books,
 
-  const updateBook = async (
-    id: string,
-    input: Omit<UpdateBookInput, 'position'>,
-  ) => {
-    await bookRepository.update(id, input);
-  };
+    async createBook(projectId, title) {
+      const projectBooks = await bookRepository.listByProject(projectId);
+      const position = generateKeyBetween(
+        projectBooks[projectBooks.length - 1]?.position,
+        undefined,
+      );
+      await bookRepository.create({ projectId, title, position });
+    },
 
-  const moveBook = async (id: string, nextBookId?: string) => {
-    const book = books().find((b) => b.id === id);
-    if (!book) return;
+    async updateBook(id, input) {
+      await bookRepository.update(id, input);
+    },
 
-    const siblings = (
-      await bookRepository.listByProject(book.project_id)
-    ).filter((b) => b.id !== id);
+    async moveBook(id, nextBookId) {
+      const book = books().find((b) => b.id === id);
+      if (!book) return;
 
-    let position: string;
-    if (nextBookId) {
-      const nextIndex = siblings.findIndex((b) => b.id === nextBookId);
-      if (nextIndex === -1) return;
-      const next = siblings[nextIndex];
-      const prev = siblings[nextIndex - 1];
-      position = generateKeyBetween(prev?.position, next.position);
-    } else {
-      const last = siblings[siblings.length - 1];
-      position = generateKeyBetween(last?.position, undefined);
-    }
+      const siblings = (
+        await bookRepository.listByProject(book.project_id)
+      ).filter((b) => b.id !== id);
 
-    await bookRepository.update(id, { position });
-  };
+      let position: string;
+      if (nextBookId) {
+        const nextIndex = siblings.findIndex((b) => b.id === nextBookId);
+        if (nextIndex === -1) return;
+        const next = siblings[nextIndex];
+        const prev = siblings[nextIndex - 1];
+        position = generateKeyBetween(prev?.position, next.position);
+      } else {
+        const last = siblings[siblings.length - 1];
+        position = generateKeyBetween(last?.position, undefined);
+      }
 
-  const softDeleteBook = async (id: string) => {
-    await bookRepository.softDelete(id);
+      await bookRepository.update(id, { position });
+    },
+
+    async deleteBook(id) {
+      await bookRepository.softDelete(id);
+    },
   };
 
   return (
-    <BooksContext.Provider
-      value={{
-        books,
-        createBook,
-        updateBook,
-        moveBook,
-        softDeleteBook,
-      }}>
+    <BooksContext.Provider value={value}>
       {props.children}
     </BooksContext.Provider>
   );
