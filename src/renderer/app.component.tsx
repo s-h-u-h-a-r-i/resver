@@ -1,9 +1,14 @@
 import { type Component } from 'solid-js';
 
-import { AuthProvider } from './features/auth';
+import { BooksProvider } from './features/books';
+import { ProjectsProvider } from './features/projects';
 
 const App: Component = () => {
-  return <AuthProvider />;
+  return (
+    <ProjectsProvider>
+      <BooksProvider />
+    </ProjectsProvider>
+  );
 };
 
 export default App;
