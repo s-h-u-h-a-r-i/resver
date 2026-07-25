@@ -1,15 +1,20 @@
 import { Accessor, createContext, ParentComponent, useContext } from 'solid-js';
 
-import {
-  createLiveQuery,
-  projectRepository,
-  type CreateProjectInput,
-  type LocalProject,
-  type UpdateProjectInput,
-} from '@/shared/db';
+import type * as DbTypes from '@/shared/db';
+import { createLiveQuery } from '@/shared/db';
+import { omitUndefined } from '@/shared/utils/omit-undefined';
+
+type CreateProjectInput = Pick<
+  DbTypes.LocalProjectCamel,
+  'title' | 'description'
+>;
+type UpdateProjectInput = Partial<
+  Pick<DbTypes.LocalProjectCamel, 'title' | 'description'>
+>;
 
 interface ProjectsContextValue {
-  projects: Accessor<LocalProject[]>;
+  projects: Accessor<DbTypes.LocalProject[]>;
+
   createProject(input: CreateProjectInput): Promise<void>;
   updateProject(id: string, input: UpdateProjectInput): Promise<void>;
   deleteProject(id: string): Promise<void>;
@@ -17,24 +22,51 @@ interface ProjectsContextValue {
 
 const ProjectsContext = createContext<ProjectsContextValue>();
 
-export const ProjectsProvider: ParentComponent = (props) => {
-  const projects = createLiveQuery(projectRepository.list, {
-    initial: [],
-  });
+export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
+  props,
+) => {
+  const projects = createLiveQuery(
+    () =>
+      props.db.projects
+        .filter((p) => p.deleted_at === null)
+        .sortBy('created_at'),
+    {
+      initial: [],
+    },
+  );
 
   const value: ProjectsContextValue = {
     projects,
 
     async createProject(input) {
-      await projectRepository.create(input);
+      const now = new Date().toISOString();
+      await props.db.projects.add({
+        id: crypto.randomUUID(),
+        title: input.title,
+        description: input.description,
+        deleted_at: null,
+        created_at: now,
+        updated_at: now,
+      });
     },
 
     async updateProject(id, input) {
-      await projectRepository.update(id, input);
+      await props.db.projects.update(
+        id,
+        omitUndefined<DbTypes.ProjectUpdate>({
+          title: input.title,
+          description: input.description,
+          updated_at: new Date().toISOString(),
+        }),
+      );
     },
 
     async deleteProject(id) {
-      await projectRepository.softDelete(id);
+      const now = new Date().toISOString();
+      await props.db.projects.update(id, {
+        deleted_at: now,
+        updated_at: now,
+      });
     },
   };
 

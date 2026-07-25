@@ -5,45 +5,56 @@ import {
   type ParentComponent,
 } from 'solid-js';
 
-import {
-  bookRepository,
-  createLiveQuery,
-  type LocalBook,
-  type UpdateBookInput,
-} from '@/shared/db';
+import type * as DbTypes from '@/shared/db';
+import { createLiveQuery } from '@/shared/db';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 
 interface BooksContextValue {
-  books: Accessor<LocalBook[]>;
+  books: Accessor<DbTypes.LocalBook[]>;
 
   createBook(projectId: string, title: string): Promise<void>;
-  updateBook(
-    id: string,
-    input: Omit<UpdateBookInput, 'position'>,
-  ): Promise<void>;
+  updateBook(id: string, title: string): Promise<void>;
   moveBook(id: string, nextBookId?: string): Promise<void>;
   deleteBook(id: string): Promise<void>;
 }
 
 const BooksContext = createContext<BooksContextValue>();
 
-export const BooksProvider: ParentComponent = (props) => {
-  const books = createLiveQuery(bookRepository.list, { initial: [] });
+export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
+  props,
+) => {
+  const books = createLiveQuery(
+    () =>
+      props.db.books.filter((b) => b.deleted_at === null).sortBy('created_at'),
+    { initial: [] },
+  );
 
   const value: BooksContextValue = {
     books,
 
     async createBook(projectId, title) {
-      const projectBooks = await bookRepository.listByProject(projectId);
+      const projectBooks = await listBooksByProject(props.db, projectId);
       const position = generateKeyBetween(
         projectBooks[projectBooks.length - 1]?.position,
         undefined,
       );
-      await bookRepository.create({ projectId, title, position });
+      const now = new Date().toISOString();
+      await props.db.books.add({
+        id: crypto.randomUUID(),
+        project_id: projectId,
+        title,
+        position,
+        deleted_at: null,
+        updated_at: now,
+        created_at: now,
+      });
     },
 
-    async updateBook(id, input) {
-      await bookRepository.update(id, input);
+    async updateBook(id, title) {
+      await props.db.books.update(id, {
+        title,
+        updated_at: new Date().toISOString(),
+      });
     },
 
     async moveBook(id, nextBookId) {
@@ -51,7 +62,7 @@ export const BooksProvider: ParentComponent = (props) => {
       if (!book) return;
 
       const siblings = (
-        await bookRepository.listByProject(book.project_id)
+        await listBooksByProject(props.db, book.project_id)
       ).filter((b) => b.id !== id);
 
       let position: string;
@@ -66,11 +77,15 @@ export const BooksProvider: ParentComponent = (props) => {
         position = generateKeyBetween(last?.position, undefined);
       }
 
-      await bookRepository.update(id, { position });
+      await props.db.books.update(id, {
+        position,
+        updated_at: new Date().toISOString(),
+      });
     },
 
     async deleteBook(id) {
-      await bookRepository.softDelete(id);
+      const now = new Date().toISOString();
+      await props.db.books.update(id, { deleted_at: now, updated_at: now });
     },
   };
 
@@ -89,4 +104,12 @@ export function useBooks() {
     );
   }
   return ctx;
+}
+
+function listBooksByProject(db: DbTypes.AppDatabase, projectId: string) {
+  return db.books
+    .where('project_id')
+    .equals(projectId)
+    .and((b) => b.deleted_at === null)
+    .sortBy('position');
 }

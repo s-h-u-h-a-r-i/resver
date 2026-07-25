@@ -5,53 +5,76 @@ import {
   type ParentComponent,
 } from 'solid-js';
 
-import {
-  createLiveQuery,
-  sceneRepository,
-  type CreateSceneInput,
-  type LocalScene,
-  type UpdateSceneInput,
-} from '@/shared/db';
+import type * as DbTypes from '@/shared/db';
+import { createLiveQuery } from '@/shared/db';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
+import { omitUndefined } from '@/shared/utils/omit-undefined';
+
+type CreateSceneInput = Pick<DbTypes.LocalSceneCamel, 'title' | 'bookId'>;
+type UpdateSceneInput = Partial<
+  Pick<DbTypes.LocalSceneCamel, 'status' | 'title' | 'wordCount'>
+>;
 
 interface ScenesContextValue {
-  scenes: Accessor<LocalScene[]>;
+  scenes: Accessor<DbTypes.LocalScene[]>;
 
-  createScene(input: Omit<CreateSceneInput, 'position'>): Promise<void>;
-  updateScene(
-    id: string,
-    input: Omit<UpdateSceneInput, 'position'>,
-  ): Promise<void>;
+  createScene(input: CreateSceneInput): Promise<void>;
+  updateScene(id: string, input: UpdateSceneInput): Promise<void>;
   moveScene(id: string, nextSceneId?: string): Promise<void>;
   deleteScene(id: string): Promise<void>;
 }
 
 const ScenesContext = createContext<ScenesContextValue>();
 
-export const ScenesProvider: ParentComponent = (props) => {
-  const scenes = createLiveQuery(sceneRepository.list, { initial: [] });
+export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
+  props,
+) => {
+  const scenes = createLiveQuery(
+    () =>
+      props.db.scenes.filter((s) => s.deleted_at === null).sortBy('created_at'),
+    { initial: [] },
+  );
 
   const value: ScenesContextValue = {
     scenes,
 
     async createScene(input) {
-      const bookScenes = await sceneRepository.listByBook(input.bookId);
+      const bookScenes = await listScenesByBook(props.db, input.bookId);
       const position = generateKeyBetween(
         bookScenes[bookScenes.length - 1]?.position,
         undefined,
       );
-      await sceneRepository.create({ ...input, position });
+      const now = new Date().toISOString();
+      await props.db.scenes.add({
+        id: crypto.randomUUID(),
+        book_id: input.bookId,
+        title: input.title,
+        position,
+        status: 'draft',
+        word_count: 0,
+        deleted_at: null,
+        created_at: now,
+        updated_at: now,
+      });
     },
 
     async updateScene(id, input) {
-      await sceneRepository.update(id, input);
+      await props.db.scenes.update(
+        id,
+        omitUndefined<DbTypes.SceneUpdate>({
+          status: input.status,
+          title: input.title,
+          word_count: input.wordCount,
+          updated_at: new Date().toISOString(),
+        }),
+      );
     },
 
     async moveScene(id, nextSceneId) {
       const scene = scenes().find((s) => s.id === id);
       if (!scene) return;
 
-      const siblings = (await sceneRepository.listByBook(scene.book_id)).filter(
+      const siblings = (await listScenesByBook(props.db, scene.book_id)).filter(
         (s) => s.id !== id,
       );
 
@@ -67,11 +90,18 @@ export const ScenesProvider: ParentComponent = (props) => {
         position = generateKeyBetween(last?.position, undefined);
       }
 
-      await sceneRepository.update(id, { position });
+      await props.db.scenes.update(id, {
+        position,
+        updated_at: new Date().toISOString(),
+      });
     },
 
     async deleteScene(id) {
-      await sceneRepository.softDelete(id);
+      const now = new Date().toISOString();
+      await props.db.scenes.update(id, {
+        deleted_at: now,
+        updated_at: now,
+      });
     },
   };
 
@@ -90,4 +120,12 @@ export function useScenes() {
     );
   }
   return ctx;
+}
+
+function listScenesByBook(db: DbTypes.AppDatabase, bookId: string) {
+  return db.scenes
+    .where('book_id')
+    .equals(bookId)
+    .and((s) => s.deleted_at === null)
+    .sortBy('position');
 }

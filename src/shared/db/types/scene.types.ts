@@ -1,3 +1,6 @@
+import type { SnakeToCamelCaseKeys } from '@/shared/utils/types';
+import type { EntityTable, InsertType, UpdateSpec } from 'dexie';
+
 export interface LocalScene {
   id: string;
   book_id: string;
@@ -9,3 +12,11 @@ export interface LocalScene {
   created_at: string;
   updated_at: string;
 }
+
+export type LocalSceneCamel = SnakeToCamelCaseKeys<LocalScene>;
+
+export type ScenesTable = EntityTable<LocalScene, 'id'>;
+
+export type SceneInsert = InsertType<LocalScene, 'id'>;
+
+export type SceneUpdate = UpdateSpec<SceneInsert>;

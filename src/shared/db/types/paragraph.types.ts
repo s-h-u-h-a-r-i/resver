@@ -1,3 +1,5 @@
+import type { EntityTable } from 'dexie';
+
 export interface LocalParagraph {
   id: string;
   scene_id: string;
@@ -7,3 +9,5 @@ export interface LocalParagraph {
   created_at: string;
   updated_at: string;
 }
+
+export type ParagraphsTable = EntityTable<LocalParagraph, 'id'>;

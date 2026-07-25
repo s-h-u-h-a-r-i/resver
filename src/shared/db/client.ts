@@ -1,17 +1,17 @@
-import { Dexie, EntityTable } from 'dexie';
+import { Dexie } from 'dexie';
 
 import type * as DbTypes from './types';
 
 export interface AppDatabase extends Dexie {
-  projects: EntityTable<DbTypes.LocalProject, 'id'>;
-  books: EntityTable<DbTypes.LocalBook, 'id'>;
-  scenes: EntityTable<DbTypes.LocalScene, 'id'>;
-  paragraphs: EntityTable<DbTypes.LocalParagraph, 'id'>;
-  characters: EntityTable<DbTypes.LocalCharacter, 'id'>;
-  sceneCharacters: EntityTable<DbTypes.LocalSceneCharacter, 'scene_id'>;
-  continuityNotes: EntityTable<DbTypes.LocalContinuityNote, 'id'>;
-  styleNotes: EntityTable<DbTypes.LocalStyleNote, 'id'>;
-  futureBeats: EntityTable<DbTypes.LocalFutureBeat, 'id'>;
+  projects: DbTypes.ProjectsTable;
+  books: DbTypes.BooksTable;
+  scenes: DbTypes.ScenesTable;
+  paragraphs: DbTypes.ParagraphsTable;
+  characters: DbTypes.CharactersTable;
+  sceneCharacters: DbTypes.SceneCharactersTable;
+  continuityNotes: DbTypes.ContinuityNotesTable;
+  styleNotes: DbTypes.StyleNotesTable;
+  futureBeats: DbTypes.FutureBeatsTable;
 }
 
 export const db = new Dexie('resver') as AppDatabase;

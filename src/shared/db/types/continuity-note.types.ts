@@ -1,3 +1,5 @@
+import type { EntityTable } from 'dexie';
+
 export interface LocalContinuityNote {
   id: string;
   paragraph_id: string;
@@ -8,3 +10,5 @@ export interface LocalContinuityNote {
   created_at: string;
   updated_at: string;
 }
+
+export type ContinuityNotesTable = EntityTable<LocalContinuityNote, 'id'>;

@@ -1,3 +1,6 @@
+import type { SnakeToCamelCaseKeys } from '@/shared/utils/types';
+import type { EntityTable, InsertType, UpdateSpec } from 'dexie';
+
 export interface LocalProject {
   id: string;
   title: string;
@@ -6,3 +9,11 @@ export interface LocalProject {
   created_at: string;
   updated_at: string;
 }
+
+export type LocalProjectCamel = SnakeToCamelCaseKeys<LocalProject>;
+
+export type ProjectsTable = EntityTable<LocalProject, 'id'>;
+
+export type ProjectInsert = InsertType<LocalProject, 'id'>;
+
+export type ProjectUpdate = UpdateSpec<ProjectInsert>;

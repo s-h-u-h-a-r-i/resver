@@ -1,3 +1,3 @@
-export * from './repositories';
-export * from './types';
+export * from './client';
+export type * from './types';
 export * from './utils';
