@@ -72,6 +72,12 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     };
   });
 
+  const workspaceDataHasCaughtUp = createMemo(
+    () =>
+      selectedSceneId() !== undefined &&
+      (selectedSceneId() === null || combinedWorkspaceData() !== null),
+  );
+
   const selectScene = (id: string) => {
     const allScenes = scenes();
     if (!allScenes.some((scene) => scene.id === id)) {
@@ -99,9 +105,7 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   });
 
   return (
-    <Show
-      when={selectedSceneId() !== undefined}
-      fallback={<WorkspaceLoading />}>
+    <Show when={workspaceDataHasCaughtUp()} fallback={<WorkspaceLoading />}>
       <Show
         when={combinedWorkspaceData()}
         fallback={<WorkspaceOnboarding onSubmit={createWorkspace} />}>
