@@ -54,9 +54,10 @@ function createProjectRepository(db: AppDatabase) {
     },
 
     softDelete(id: string) {
+      const now = new Date().toISOString();
       return db.projects.update(id, {
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        deleted_at: now,
+        updated_at: now,
       });
     },
   };

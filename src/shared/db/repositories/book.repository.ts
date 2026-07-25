@@ -64,9 +64,10 @@ function createBookRepository(db: AppDatabase) {
     },
 
     softDelete(id: string) {
+      const now = new Date().toISOString();
       return db.books.update(id, {
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        deleted_at: now,
+        updated_at: now,
       });
     },
   };
