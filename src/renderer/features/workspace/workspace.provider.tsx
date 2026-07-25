@@ -13,6 +13,7 @@ import type * as DbTypes from '@/shared/db';
 import { useBooks } from '../books';
 import { useProjects } from '../projects';
 import { useScenes } from '../scenes';
+import { WorkspaceLoading } from './ui/workspace-loading';
 
 interface WorkspaceContextValue {
   selectedScene: Accessor<DbTypes.LocalScene>;
@@ -89,7 +90,7 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   return (
     <Show
       when={selectedSceneId() !== undefined}
-      fallback={<h1>Loading shit</h1>}>
+      fallback={<WorkspaceLoading />}>
       <Show
         when={combinedWorkspaceData()}
         fallback={
