@@ -14,6 +14,7 @@ import { useBooks } from '../books';
 import { useProjects } from '../projects';
 import { useScenes } from '../scenes';
 import { WorkspaceLoading } from './ui/workspace-loading.component';
+import { WorkspaceOnboarding } from './ui/workspace-onboarding.component';
 
 interface WorkspaceContextValue {
   selectedScene: Accessor<DbTypes.LocalScene>;
@@ -28,9 +29,9 @@ const WorkspaceContext = createContext<WorkspaceContextValue>();
 export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
-  const { projects } = useProjects();
-  const { books } = useBooks();
-  const { scenes } = useScenes();
+  const { projects, createProject } = useProjects();
+  const { books, createBook } = useBooks();
+  const { scenes, createScene } = useScenes();
 
   const [selectedSceneId, setSelectedSceneId] = createSignal<string | null>();
 
@@ -79,6 +80,16 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     setSelectedSceneId(id);
   };
 
+  const createWorkspace = async (input: {
+    title: string;
+    description: string | null;
+  }) => {
+    const projectId = await createProject(input);
+    const bookId = await createBook(projectId, 'Book One');
+    const sceneId = await createScene({ title: 'Scene 1', bookId });
+    setSelectedSceneId(sceneId);
+  };
+
   onMount(async () => {
     const mostRecentlyUpdatedScene = await props.db.scenes
       .orderBy('updated_at')
@@ -93,12 +104,7 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
       fallback={<WorkspaceLoading />}>
       <Show
         when={combinedWorkspaceData()}
-        fallback={
-          <h1>
-            No scenes means no projects so we need a way to allow user to create
-            project with filler book and scene
-          </h1>
-        }>
+        fallback={<WorkspaceOnboarding onSubmit={createWorkspace} />}>
         {(data) => (
           <WorkspaceContext.Provider
             value={{
