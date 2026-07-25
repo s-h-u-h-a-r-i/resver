@@ -79,10 +79,10 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   };
 
   onMount(async () => {
-    const [mostRecentlyUpdatedScene] = await props.db.scenes
+    const mostRecentlyUpdatedScene = await props.db.scenes
+      .orderBy('updated_at')
       .filter((s) => s.deleted_at === null)
-      .reverse()
-      .sortBy('updated_at');
+      .last();
     setSelectedSceneId(mostRecentlyUpdatedScene?.id ?? null);
   });
 
