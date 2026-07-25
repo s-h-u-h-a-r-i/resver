@@ -4,7 +4,7 @@ import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { db, type AppDatabase } from '../client';
 import type { LocalProject } from '../types';
 
-export type ProjectRepository = ReturnType<typeof createProjectRepository>;
+type ProjectInsert = InsertType<LocalProject, 'id'>;
 
 export interface CreateProjectInput {
   title: string;
@@ -14,7 +14,7 @@ export type UpdateProjectInput = Partial<
   Pick<LocalProject, 'title' | 'description'>
 >;
 
-export const projectRepository: ProjectRepository = createProjectRepository(db);
+export const projectRepository = createProjectRepository(db);
 
 function createProjectRepository(db: AppDatabase) {
   return {
@@ -30,7 +30,7 @@ function createProjectRepository(db: AppDatabase) {
 
     create(input: CreateProjectInput) {
       const now = new Date().toISOString();
-      const project: InsertType<LocalProject, 'id'> = {
+      const project: ProjectInsert = {
         id: crypto.randomUUID(),
         title: input.title,
         description: null,
@@ -44,7 +44,7 @@ function createProjectRepository(db: AppDatabase) {
     update(id: string, input: UpdateProjectInput) {
       return db.projects.update(
         id,
-        omitUndefined<UpdateSpec<LocalProject>>({
+        omitUndefined<UpdateSpec<ProjectInsert>>({
           title: input.title,
           description: input.description,
           updated_at: new Date().toISOString(),

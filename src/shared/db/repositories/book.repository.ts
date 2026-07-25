@@ -1,7 +1,10 @@
-import { omitUndefined } from '@/shared/utils/omit-undefined';
 import type { InsertType, UpdateSpec } from 'dexie';
+
+import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { db, type AppDatabase } from '../client';
 import type { LocalBook } from '../types';
+
+type bookInsert = InsertType<LocalBook, 'id'>;
 
 export interface CreateBookInput {
   projectId: string;
@@ -33,7 +36,7 @@ function createBookRepository(db: AppDatabase) {
 
     create(input: CreateBookInput) {
       const now = new Date().toISOString();
-      const book: InsertType<LocalBook, 'id'> = {
+      const book: bookInsert = {
         id: crypto.randomUUID(),
         project_id: input.projectId,
         title: input.title,
@@ -48,7 +51,7 @@ function createBookRepository(db: AppDatabase) {
     update(id: string, input: UpdateBookInput) {
       return db.books.update(
         id,
-        omitUndefined<UpdateSpec<LocalBook>>({
+        omitUndefined<UpdateSpec<bookInsert>>({
           title: input.title,
           position: input.position,
           updated_at: new Date().toISOString(),
