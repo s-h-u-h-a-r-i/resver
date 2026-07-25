@@ -15,7 +15,7 @@ type UpdateProjectInput = Partial<
 interface ProjectsContextValue {
   projects: Accessor<DbTypes.LocalProject[]>;
 
-  createProject(input: CreateProjectInput): Promise<void>;
+  createProject(input: CreateProjectInput): Promise<string>;
   updateProject(id: string, input: UpdateProjectInput): Promise<void>;
   deleteProject(id: string): Promise<void>;
 }
@@ -40,14 +40,16 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 
     async createProject(input) {
       const now = new Date().toISOString();
+      const id = crypto.randomUUID();
       await props.db.projects.add({
-        id: crypto.randomUUID(),
+        id,
         title: input.title,
         description: input.description,
         deleted_at: null,
         created_at: now,
         updated_at: now,
       });
+      return id;
     },
 
     async updateProject(id, input) {

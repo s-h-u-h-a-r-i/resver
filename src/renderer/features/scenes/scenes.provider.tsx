@@ -18,7 +18,7 @@ type UpdateSceneInput = Partial<
 interface ScenesContextValue {
   scenes: Accessor<DbTypes.LocalScene[]>;
 
-  createScene(input: CreateSceneInput): Promise<void>;
+  createScene(input: CreateSceneInput): Promise<string>;
   updateScene(id: string, input: UpdateSceneInput): Promise<void>;
   moveScene(id: string, nextSceneId?: string): Promise<void>;
   deleteScene(id: string): Promise<void>;
@@ -45,8 +45,9 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         undefined,
       );
       const now = new Date().toISOString();
+      const id = crypto.randomUUID();
       await props.db.scenes.add({
-        id: crypto.randomUUID(),
+        id,
         book_id: input.bookId,
         title: input.title,
         position,
@@ -56,6 +57,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         created_at: now,
         updated_at: now,
       });
+      return id;
     },
 
     async updateScene(id, input) {
