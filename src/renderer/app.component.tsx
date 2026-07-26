@@ -4,15 +4,12 @@ import { db } from '@/shared/db';
 import { BooksProvider } from './features/books';
 import { ProjectsProvider } from './features/projects';
 import { ScenesProvider } from './features/scenes';
-import { WorkspaceProvider } from './features/workspace';
 
 const App: Component = () => {
   return (
     <ProjectsProvider db={db}>
       <BooksProvider db={db}>
-        <ScenesProvider db={db}>
-          <WorkspaceProvider db={db} />
-        </ScenesProvider>
+        <ScenesProvider db={db} />
       </BooksProvider>
     </ProjectsProvider>
   );
