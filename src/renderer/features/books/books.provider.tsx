@@ -14,7 +14,11 @@ interface BooksContextValue {
 
   createBook(projectId: string, title: string): Promise<string>;
   updateBook(id: string, title: string): Promise<void>;
-  moveBook(id: string, nextBookId?: string): Promise<void>;
+  moveBook(
+    id: string,
+    prevBookId: string | undefined,
+    nextBookId: string | undefined,
+  ): Promise<void>;
   deleteBook(id: string): Promise<void>;
 }
 
@@ -59,28 +63,28 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
       });
     },
 
-    async moveBook(id, nextBookId) {
+    async moveBook(id, prevBookId, nextBookId) {
       const book = books().find((b) => b.id === id);
       if (!book) return;
 
-      const siblings = (
-        await listBooksByProject(props.db, book.project_id)
-      ).filter((b) => b.id !== id);
+      const prevBook = books().find(
+        (b) => b.id === prevBookId && b.project_id === book.project_id,
+      );
+      const nextBook = books().find(
+        (b) => b.id === nextBookId && b.project_id === book.project_id,
+      );
 
-      let position: string;
-      if (nextBookId) {
-        const nextIndex = siblings.findIndex((b) => b.id === nextBookId);
-        if (nextIndex === -1) return;
-        const next = siblings[nextIndex];
-        const prev = siblings[nextIndex - 1];
-        position = generateKeyBetween(prev?.position, next.position);
-      } else {
-        const last = siblings[siblings.length - 1];
-        position = generateKeyBetween(last?.position, undefined);
+      if (
+        prevBookId === id ||
+        nextBookId === id ||
+        (prevBookId !== undefined && !prevBook) ||
+        (nextBookId !== undefined && !nextBook)
+      ) {
+        return;
       }
 
       await props.db.books.update(id, {
-        position,
+        position: generateKeyBetween(prevBook?.position, nextBook?.position),
         updated_at: new Date().toISOString(),
       });
     },

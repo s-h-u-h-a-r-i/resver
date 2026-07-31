@@ -20,7 +20,11 @@ interface ScenesContextValue {
 
   createScene(input: CreateSceneInput): Promise<string>;
   updateScene(id: string, input: UpdateSceneInput): Promise<void>;
-  moveScene(id: string, nextSceneId?: string): Promise<void>;
+  moveScene(
+    id: string,
+    prevSceneId: string | undefined,
+    nextSceneId: string | undefined,
+  ): Promise<void>;
   deleteScene(id: string): Promise<void>;
 }
 
@@ -72,28 +76,28 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
       );
     },
 
-    async moveScene(id, nextSceneId) {
+    async moveScene(id, prevSceneId, nextSceneId) {
       const scene = scenes().find((s) => s.id === id);
       if (!scene) return;
 
-      const siblings = (await listScenesByBook(props.db, scene.book_id)).filter(
-        (s) => s.id !== id,
+      const prevScene = scenes().find(
+        (s) => s.id === prevSceneId && s.book_id === scene.book_id,
+      );
+      const nextScene = scenes().find(
+        (s) => s.id === nextSceneId && s.book_id === scene.book_id,
       );
 
-      let position: string;
-      if (nextSceneId) {
-        const nextIndex = siblings.findIndex((s) => s.id === nextSceneId);
-        if (nextIndex === -1) return;
-        const next = siblings[nextIndex];
-        const prev = siblings[nextIndex - 1];
-        position = generateKeyBetween(prev?.position, next.position);
-      } else {
-        const last = siblings[siblings.length - 1];
-        position = generateKeyBetween(last?.position, undefined);
+      if (
+        prevSceneId === id ||
+        nextSceneId === id ||
+        (prevSceneId !== undefined && !prevScene) ||
+        (nextSceneId !== undefined && !nextScene)
+      ) {
+        return;
       }
 
       await props.db.scenes.update(id, {
-        position,
+        position: generateKeyBetween(prevScene?.position, nextScene?.position),
         updated_at: new Date().toISOString(),
       });
     },
