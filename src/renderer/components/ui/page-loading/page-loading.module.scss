@@ -1,0 +1,38 @@
+.root {
+  width: 100%;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  background: var(--bg);
+  color: var(--ink-2);
+}
+
+.logo {
+  width: 7rem;
+  height: 7rem;
+  object-fit: contain;
+  animation: breathe 1.8s ease-in-out infinite;
+}
+
+.label {
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.97);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

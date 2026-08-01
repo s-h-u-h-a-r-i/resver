@@ -1,5 +1,6 @@
 import {
   createContext,
+  Show,
   useContext,
   type Accessor,
   type ParentComponent,
@@ -9,6 +10,7 @@ import type * as DbTypes from '@/shared/db';
 import { createLiveQuery } from '@/shared/db';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import { PageLoading } from '../../components/ui/page-loading';
 
 type CreateSceneInput = Pick<DbTypes.LocalSceneCamel, 'title' | 'bookId'>;
 type UpdateSceneInput = Partial<
@@ -33,15 +35,11 @@ const ScenesContext = createContext<ScenesContextValue>();
 export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
-  const scenes = createLiveQuery(
-    () =>
-      props.db.scenes.filter((s) => s.deleted_at === null).sortBy('position'),
-    { initial: [] },
+  const scenes = createLiveQuery(() =>
+    props.db.scenes.filter((s) => s.deleted_at === null).sortBy('position'),
   );
 
-  const value: ScenesContextValue = {
-    scenes,
-
+  const actions: Omit<ScenesContextValue, 'scenes'> = {
     async createScene(input) {
       const bookScenes = await listScenesByBook(props.db.scenes, input.bookId);
       const position = generateKeyBetween(
@@ -122,9 +120,13 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   };
 
   return (
-    <ScenesContext.Provider value={value}>
-      {props.children}
-    </ScenesContext.Provider>
+    <Show when={scenes()} fallback={<PageLoading reason="Loading scenes" />}>
+      {(loadedScenes) => (
+        <ScenesContext.Provider value={{ scenes: loadedScenes, ...actions }}>
+          {props.children}
+        </ScenesContext.Provider>
+      )}
+    </Show>
   );
 };
 

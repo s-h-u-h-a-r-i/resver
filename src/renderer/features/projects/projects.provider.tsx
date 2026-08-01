@@ -1,8 +1,15 @@
-import { Accessor, createContext, ParentComponent, useContext } from 'solid-js';
+import {
+  createContext,
+  Show,
+  useContext,
+  type Accessor,
+  type ParentComponent,
+} from 'solid-js';
 
 import type * as DbTypes from '@/shared/db';
 import { createLiveQuery } from '@/shared/db';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import { PageLoading } from '../../components/ui/page-loading';
 
 type CreateProjectInput = Pick<
   DbTypes.LocalProjectCamel,
@@ -25,19 +32,11 @@ const ProjectsContext = createContext<ProjectsContextValue>();
 export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
-  const projects = createLiveQuery(
-    () =>
-      props.db.projects
-        .filter((p) => p.deleted_at === null)
-        .sortBy('created_at'),
-    {
-      initial: [],
-    },
+  const projects = createLiveQuery(() =>
+    props.db.projects.filter((p) => p.deleted_at === null).sortBy('created_at'),
   );
 
-  const value: ProjectsContextValue = {
-    projects,
-
+  const actions: Omit<ProjectsContextValue, 'projects'> = {
     async createProject(input) {
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
@@ -73,9 +72,16 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   };
 
   return (
-    <ProjectsContext.Provider value={value}>
-      {props.children}
-    </ProjectsContext.Provider>
+    <Show
+      when={projects()}
+      fallback={<PageLoading reason="Loading projects" />}>
+      {(loadedProjects) => (
+        <ProjectsContext.Provider
+          value={{ projects: loadedProjects, ...actions }}>
+          {props.children}
+        </ProjectsContext.Provider>
+      )}
+    </Show>
   );
 };
 

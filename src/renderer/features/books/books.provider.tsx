@@ -1,5 +1,6 @@
 import {
   createContext,
+  Show,
   useContext,
   type Accessor,
   type ParentComponent,
@@ -8,6 +9,7 @@ import {
 import type * as DbTypes from '@/shared/db';
 import { createLiveQuery } from '@/shared/db';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
+import { PageLoading } from '../../components/ui/page-loading';
 
 interface BooksContextValue {
   books: Accessor<DbTypes.LocalBook[]>;
@@ -27,15 +29,11 @@ const BooksContext = createContext<BooksContextValue>();
 export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
-  const books = createLiveQuery(
-    () =>
-      props.db.books.filter((b) => b.deleted_at === null).sortBy('position'),
-    { initial: [] },
+  const books = createLiveQuery(() =>
+    props.db.books.filter((b) => b.deleted_at === null).sortBy('position'),
   );
 
-  const value: BooksContextValue = {
-    books,
-
+  const actions: Omit<BooksContextValue, 'books'> = {
     async createBook(projectId, title) {
       const projectBooks = await listBooksByProject(props.db.books, projectId);
       const position = generateKeyBetween(
@@ -106,9 +104,13 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   };
 
   return (
-    <BooksContext.Provider value={value}>
-      {props.children}
-    </BooksContext.Provider>
+    <Show when={books()} fallback={<PageLoading reason="Loading books" />}>
+      {(loadedBooks) => (
+        <BooksContext.Provider value={{ books: loadedBooks, ...actions }}>
+          {props.children}
+        </BooksContext.Provider>
+      )}
+    </Show>
   );
 };
 
