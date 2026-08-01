@@ -35,7 +35,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const scenes = createLiveQuery(
     () =>
-      props.db.scenes.filter((s) => s.deleted_at === null).sortBy('created_at'),
+      props.db.scenes.filter((s) => s.deleted_at === null).sortBy('position'),
     { initial: [] },
   );
 
@@ -43,7 +43,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     scenes,
 
     async createScene(input) {
-      const bookScenes = await listScenesByBook(props.db, input.bookId);
+      const bookScenes = await listScenesByBook(props.db.scenes, input.bookId);
       const position = generateKeyBetween(
         bookScenes[bookScenes.length - 1]?.position,
         undefined,
@@ -77,28 +77,38 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     },
 
     async moveScene(id, prevSceneId, nextSceneId) {
-      const scene = scenes().find((s) => s.id === id);
-      if (!scene) return;
+      await props.db.transaction('rw', props.db.scenes, async (trans) => {
+        const scene = await trans.scenes.get(id);
+        if (!scene || scene.deleted_at !== null) return;
 
-      const prevScene = scenes().find(
-        (s) => s.id === prevSceneId && s.book_id === scene.book_id,
-      );
-      const nextScene = scenes().find(
-        (s) => s.id === nextSceneId && s.book_id === scene.book_id,
-      );
+        const siblings = (
+          await listScenesByBook(trans.scenes, scene.book_id)
+        ).filter((s) => s.id !== id);
 
-      if (
-        prevSceneId === id ||
-        nextSceneId === id ||
-        (prevSceneId !== undefined && !prevScene) ||
-        (nextSceneId !== undefined && !nextScene)
-      ) {
-        return;
-      }
+        const prevIndex =
+          prevSceneId === undefined
+            ? -1
+            : siblings.findIndex((s) => s.id === prevSceneId);
+        const nextIndex =
+          nextSceneId === undefined
+            ? siblings.length
+            : siblings.findIndex((s) => s.id === nextSceneId);
 
-      await props.db.scenes.update(id, {
-        position: generateKeyBetween(prevScene?.position, nextScene?.position),
-        updated_at: new Date().toISOString(),
+        if (
+          (prevSceneId !== undefined && prevIndex === -1) ||
+          (nextSceneId !== undefined && nextIndex === -1) ||
+          nextIndex !== prevIndex + 1
+        ) {
+          return;
+        }
+
+        await trans.scenes.update(id, {
+          position: generateKeyBetween(
+            siblings[prevIndex]?.position,
+            siblings[nextIndex]?.position,
+          ),
+          updated_at: new Date().toISOString(),
+        });
       });
     },
 
@@ -128,8 +138,8 @@ export function useScenes() {
   return ctx;
 }
 
-function listScenesByBook(db: DbTypes.AppDatabase, bookId: string) {
-  return db.scenes
+function listScenesByBook(scenes: DbTypes.ScenesTable, bookId: string) {
+  return scenes
     .where('book_id')
     .equals(bookId)
     .and((s) => s.deleted_at === null)

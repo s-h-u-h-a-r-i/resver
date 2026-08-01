@@ -29,7 +29,7 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const books = createLiveQuery(
     () =>
-      props.db.books.filter((b) => b.deleted_at === null).sortBy('created_at'),
+      props.db.books.filter((b) => b.deleted_at === null).sortBy('position'),
     { initial: [] },
   );
 
@@ -37,7 +37,7 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     books,
 
     async createBook(projectId, title) {
-      const projectBooks = await listBooksByProject(props.db, projectId);
+      const projectBooks = await listBooksByProject(props.db.books, projectId);
       const position = generateKeyBetween(
         projectBooks[projectBooks.length - 1]?.position,
         undefined,
@@ -64,28 +64,38 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     },
 
     async moveBook(id, prevBookId, nextBookId) {
-      const book = books().find((b) => b.id === id);
-      if (!book) return;
+      await props.db.transaction('rw', props.db.books, async (trans) => {
+        const book = await trans.books.get(id);
+        if (!book || book.deleted_at !== null) return;
 
-      const prevBook = books().find(
-        (b) => b.id === prevBookId && b.project_id === book.project_id,
-      );
-      const nextBook = books().find(
-        (b) => b.id === nextBookId && b.project_id === book.project_id,
-      );
+        const siblings = (
+          await listBooksByProject(trans.books, book.project_id)
+        ).filter((b) => b.id !== id);
 
-      if (
-        prevBookId === id ||
-        nextBookId === id ||
-        (prevBookId !== undefined && !prevBook) ||
-        (nextBookId !== undefined && !nextBook)
-      ) {
-        return;
-      }
+        const prevIndex =
+          prevBookId === undefined
+            ? -1
+            : siblings.findIndex((b) => b.id === prevBookId);
+        const nextIndex =
+          nextBookId === undefined
+            ? siblings.length
+            : siblings.findIndex((b) => b.id === nextBookId);
 
-      await props.db.books.update(id, {
-        position: generateKeyBetween(prevBook?.position, nextBook?.position),
-        updated_at: new Date().toISOString(),
+        if (
+          (prevBookId !== undefined && prevIndex === -1) ||
+          (nextBookId !== undefined && nextIndex === -1) ||
+          nextIndex !== prevIndex + 1
+        ) {
+          return;
+        }
+
+        await trans.books.update(id, {
+          position: generateKeyBetween(
+            siblings[prevIndex]?.position,
+            siblings[nextIndex]?.position,
+          ),
+          updated_at: new Date().toISOString(),
+        });
       });
     },
 
@@ -112,8 +122,8 @@ export function useBooks() {
   return ctx;
 }
 
-function listBooksByProject(db: DbTypes.AppDatabase, projectId: string) {
-  return db.books
+function listBooksByProject(books: DbTypes.BooksTable, projectId: string) {
+  return books
     .where('project_id')
     .equals(projectId)
     .and((b) => b.deleted_at === null)
