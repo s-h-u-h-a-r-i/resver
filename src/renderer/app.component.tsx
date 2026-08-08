@@ -1,6 +1,6 @@
 import { type Component } from 'solid-js';
 
-import { db } from '@/shared/db';
+import { db } from '@/renderer/core/database';
 import { BooksProvider } from './features/books';
 import { ProjectsProvider } from './features/projects';
 import { ScenesProvider } from './features/scenes';

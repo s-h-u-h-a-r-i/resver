@@ -6,8 +6,8 @@ import {
   type ParentComponent,
 } from 'solid-js';
 
-import type * as DbTypes from '@/shared/db';
-import { createLiveQuery } from '@/shared/db';
+import type * as DbTypes from '@/renderer/core/database';
+import { createLiveQuery } from '@/renderer/core/database';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { PageLoading } from '../../components/ui/page-loading';
 
