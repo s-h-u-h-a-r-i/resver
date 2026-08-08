@@ -5,6 +5,7 @@ export interface LocalProject {
   id: string;
   title: string;
   description: string | null;
+  last_visited_book_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

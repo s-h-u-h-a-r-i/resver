@@ -44,6 +44,7 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         id,
         title: input.title,
         description: input.description,
+        last_visited_book_id: null,
         deleted_at: null,
         created_at: now,
         updated_at: now,

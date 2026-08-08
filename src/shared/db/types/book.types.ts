@@ -6,6 +6,7 @@ export interface LocalBook {
   project_id: string;
   title: string;
   position: string;
+  last_visited_scene_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
