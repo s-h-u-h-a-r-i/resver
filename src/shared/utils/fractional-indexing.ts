@@ -43,12 +43,12 @@ export function generateKeyBetween(
  */
 function generateKeyBefore(b: string): string {
   for (let i = 0; i < b.length; i++) {
-    const v = digitToValue(b[i]);
+    const v = digitToValue(b[i]!);
     if (v > 0) {
       return b.slice(0, i) + valueToDigit(Math.floor(v / 2));
     }
   }
-  return '0' + generateKeyBefore(b.slice(1) || DIGITS[BASE - 1]);
+  return '0' + generateKeyBefore(b.slice(1) || DIGITS[BASE - 1]!);
 }
 
 /**
@@ -59,7 +59,7 @@ function generateKeyBefore(b: string): string {
  */
 function generateKeyAfter(a: string): string {
   for (let i = 0; i < a.length; i++) {
-    const v = digitToValue(a[i]);
+    const v = digitToValue(a[i]!);
     if (v < BASE - 1) {
       return (
         a.slice(0, i) + valueToDigit(v + 1 + Math.floor((BASE - 1 - v) / 2))
@@ -83,8 +83,8 @@ function midpoint(a: string, b: string): string {
 
   const maxLen = Math.max(a.length, b.length) + 2;
   for (; i < maxLen;) {
-    const digitA = i < a.length ? digitToValue(a[i]) : 0;
-    const digitB = i < b.length ? digitToValue(b[i]) : BASE;
+    const digitA = i < a.length ? digitToValue(a[i]!) : 0;
+    const digitB = i < b.length ? digitToValue(b[i]!) : BASE;
 
     if (digitA === digitB) {
       result += valueToDigit(digitA);
@@ -100,7 +100,7 @@ function midpoint(a: string, b: string): string {
     result += valueToDigit(digitA);
     i++;
     const restA = i < a.length ? a.slice(i) : '';
-    return result + generateKeyAfter(restA || DIGITS[0]);
+    return result + generateKeyAfter(restA || DIGITS[0]!);
   }
 
   // fallback in the highly unlikely event that something goes wrong
@@ -127,5 +127,7 @@ function digitToValue(d: string): number {
  * @returns The corresponding character from {@link DIGITS}.
  */
 function valueToDigit(v: number): string {
-  return DIGITS[v];
+  const d = DIGITS[v];
+  if (d === undefined) throw new Error(`Invalid digit value: ${v}`);
+  return d;
 }
