@@ -202,10 +202,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 
     selectProject(id) {
       return queue.enqueue(async () => {
-        const resolveProjectResult = await resolveProject(database, id);
-        if (Result.isErr(resolveProjectResult)) return resolveProjectResult;
-        setWorkspaceSelection(resolveProjectResult.value);
-        return Result.void();
+        return Result.pipe(
+          await resolveProject(database, id),
+          Result.tap(setWorkspaceSelection),
+          Result.asVoid,
+        );
       });
     },
 
@@ -215,12 +216,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         if (currentProjectId === null) {
           return Result.err(new NoActiveProjectError(id));
         }
-        const resolveBookResult = Result.pipe(
+        return Result.pipe(
           await resolveBook(database, currentProjectId, id),
           Result.tap(setWorkspaceSelection),
+          Result.asVoid,
         );
-        if (Result.isErr(resolveBookResult)) return resolveBookResult;
-        return Result.void();
       });
     },
 
@@ -236,12 +236,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           return Result.err(new NoActiveProjectError(currentBookId));
         }
 
-        const resolveSceneResult = Result.pipe(
+        return Result.pipe(
           await resolveScene(database, currentProjectId, currentBookId, id),
           Result.tap(setWorkspaceSelection),
+          Result.asVoid,
         );
-        if (Result.isErr(resolveSceneResult)) return resolveSceneResult;
-        return Result.void();
       });
     },
   };

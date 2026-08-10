@@ -24,6 +24,7 @@ type AndThenResult<R, Next> = Result<
 export const Result = {
   Error: resultError,
   void: voidResult,
+  asVoid,
   ok,
   err,
   isOk,
@@ -43,6 +44,12 @@ export const Result = {
 
 function voidResult(): Result<void, never> {
   return { ok: true, value: undefined };
+}
+
+function asVoid<R extends AnyResult>(
+  result: R,
+): Result<void, ResultFailure<R>> {
+  return result.ok ? voidResult() : (result as Result<void, ResultFailure<R>>);
 }
 
 function ok<A>(value: A): Result<A, never> {
