@@ -147,6 +147,7 @@ export const Task = {
   all,
   gen,
   run,
+  runResult,
   runOrThrow,
 } as const;
 
@@ -214,7 +215,7 @@ function map<A, B>(
 ): <E>(self: Task<A, E>) => Task<B, E> {
   return (self) =>
     make(async () => {
-      const result = await run(self);
+      const result = await runResult(self);
       return Result.isOk(result) ? Result.ok(transform(result.value)) : result;
     });
 }
@@ -224,7 +225,7 @@ function mapError<E, F>(
 ): <A>(self: Task<A, E>) => Task<A, F> {
   return (self) =>
     make(async () => {
-      const result = await run(self);
+      const result = await runResult(self);
       return Result.isOk(result) ? result : Result.err(transform(result.error));
     });
 }
@@ -234,8 +235,8 @@ function flatMap<A, B, F>(
 ): <E>(self: Task<A, E>) => Task<B, E | F> {
   return <E>(self: Task<A, E>) =>
     make<B, E | F>(async () => {
-      const result = await run(self);
-      return Result.isOk(result) ? run(transform(result.value)) : result;
+      const result = await runResult(self);
+      return Result.isOk(result) ? runResult(transform(result.value)) : result;
     });
 }
 
@@ -253,7 +254,7 @@ function tapError<E>(
 ): <A>(self: Task<A, E>) => Task<A, E> {
   return (self) =>
     make(async () => {
-      const result = await run(self);
+      const result = await runResult(self);
       if (!Result.isOk(result)) effect(result.error);
       return result;
     });
@@ -267,7 +268,7 @@ function all<const Tasks extends readonly AnyTask[]>(
   tasks: Tasks,
 ): Task<TaskSuccesses<Tasks>, TaskFailure<Tasks[number]>> {
   return make(async () => {
-    const results = await Promise.all(tasks.map(run));
+    const results = await Promise.all(tasks.map(runResult));
     const values: unknown[] = [];
 
     for (const result of results) {
@@ -290,7 +291,7 @@ function gen<Yielded extends AnyTask, A>(
     let state = iterator.next();
 
     while (!state.done) {
-      const result = await run(state.value);
+      const result = await runResult(state.value);
 
       if (!Result.isOk(result)) {
         return Result.err(result.error as TaskFailure<Yielded>);
@@ -303,12 +304,18 @@ function gen<Yielded extends AnyTask, A>(
   });
 }
 
-function run<A, E>(self: Task<A, E>): Promise<ResultType<A, E>> {
+async function run<A>(self: Task<A, never>): Promise<A> {
+  const result = await runResult(self);
+  if (Result.isOk(result)) return result.value;
+  throw result.error;
+}
+
+function runResult<A, E>(self: Task<A, E>): Promise<ResultType<A, E>> {
   return self[TaskRunId]();
 }
 
 async function runOrThrow<A, E>(self: Task<A, E>): Promise<A> {
-  const result = await run(self);
+  const result = await runResult(self);
   if (Result.isOk(result)) return result.value;
   throw result.error;
 }

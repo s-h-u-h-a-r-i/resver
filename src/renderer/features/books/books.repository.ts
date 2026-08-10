@@ -3,25 +3,36 @@ import { Result, Task } from '@/shared/utils/task';
 import { BookNotFoundError } from './books.errors';
 
 export interface ListBooksOptions {
-  includeTombstones?: boolean;
-  orderBy?: 'position' | 'createdAt' | 'updatedAt' | 'title';
+  orderBy?: 'updated_at';
   direction?: 'ascending' | 'descending';
   offset?: number;
   limit?: number;
 }
 
-const orderFields = {
-  position: 'position',
-  createdAt: 'created_at',
-  updatedAt: 'updated_at',
-  title: 'title',
-} as const;
+export type ListBooksByProjectOptions = Omit<ListBooksOptions, 'orderBy'>;
 
 export const BookRepository = {
   list: Task.fn(
     async (books: DbTypes.BooksTable, options: ListBooksOptions = {}) => {
-      const rows = await books.toArray();
-      return applyListOptions(rows, options);
+      let collection = options.orderBy
+        ? books.orderBy(options.orderBy)
+        : books.toCollection();
+
+      collection = collection.filter((book) => book.deleted_at === null);
+
+      if (options.direction === 'descending') {
+        collection = collection.reverse();
+      }
+
+      if (options.offset !== undefined) {
+        collection = collection.offset(Math.max(0, options.offset));
+      }
+
+      if (options.limit !== undefined) {
+        collection = collection.limit(Math.max(0, options.limit));
+      }
+
+      return collection.toArray();
     },
   ),
 
@@ -29,10 +40,25 @@ export const BookRepository = {
     async (
       books: DbTypes.BooksTable,
       projectId: string,
-      options: ListBooksOptions = {},
+      options: ListBooksByProjectOptions = {},
     ) => {
-      const rows = await books.where('project_id').equals(projectId).toArray();
-      return applyListOptions(rows, options);
+      let collection = books.where('project_id').equals(projectId);
+
+      collection = collection.filter((book) => book.deleted_at === null);
+
+      if (options.direction === 'descending') {
+        collection = collection.reverse();
+      }
+
+      if (options.offset !== undefined) {
+        collection = collection.offset(Math.max(0, options.offset));
+      }
+
+      if (options.limit !== undefined) {
+        collection = collection.limit(Math.max(0, options.limit));
+      }
+
+      return collection.toArray();
     },
   ),
 
@@ -58,26 +84,3 @@ export const BookRepository = {
     },
   ),
 } as const;
-
-function applyListOptions(
-  books: DbTypes.LocalBook[],
-  options: ListBooksOptions,
-) {
-  const orderField = orderFields[options.orderBy ?? 'position'];
-  const direction = options.direction === 'descending' ? -1 : 1;
-  const offset = Math.max(0, options.offset ?? 0);
-  const limit =
-    options.limit === undefined ? undefined : Math.max(0, options.limit);
-
-  const ordered = books
-    .filter((book) => options.includeTombstones || book.deleted_at === null)
-    .sort(
-      (left, right) =>
-        left[orderField].localeCompare(right[orderField]) * direction,
-    );
-
-  return ordered.slice(
-    offset,
-    limit === undefined ? undefined : offset + limit,
-  );
-}

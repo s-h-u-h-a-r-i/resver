@@ -13,7 +13,7 @@ import {
 
 import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
-import { Task, type ResultType } from '@/shared/utils/task';
+import { Task, TaskArray, type ResultType } from '@/shared/utils/task';
 import {
   BookNotFoundError,
   BookNotInProjectError,
@@ -53,9 +53,9 @@ interface WorkspaceContextValue {
   selectedScene: Accessor<DbTypes.LocalScene | null | undefined>;
   sceneParagraphs: Accessor<DbTypes.LocalParagraph[] | null | undefined>;
 
-  selectProject(id: string): Promise<ResultType<void, SelectProjectError>>;
-  selectBook(id: string): Promise<ResultType<void, SelectBookError>>;
-  selectScene(id: string): Promise<ResultType<void, SelectSceneError>>;
+  selectProject(id: string): Task<void, SelectProjectError>;
+  selectBook(id: string): Task<void, SelectBookError>;
+  selectScene(id: string): Task<void, SelectSceneError>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>();
@@ -213,50 +213,61 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     sceneParagraphs,
 
     selectProject(id) {
-      return queue.enqueue(() =>
-        resolveProject(database, id).pipe(
-          Task.tap(setWorkspaceSelection),
-          Task.asVoid,
-          Task.run,
+      return Task.make(() =>
+        queue.enqueue(() =>
+          resolveProject(database, id).pipe(
+            Task.tap(setWorkspaceSelection),
+            Task.asVoid,
+            Task.runResult,
+          ),
         ),
       );
     },
 
     selectBook(id) {
       const currentProjectId = untrack(() => selectedProject()?.id ?? null);
-      return queue.enqueue<ResultType<void, SelectBookError>>(() => {
-        if (currentProjectId === null) {
-          return Task.fail(new NoActiveProjectError(id)).pipe(Task.run);
-        }
+      return Task.make(() =>
+        queue.enqueue<ResultType<void, SelectBookError>>(() => {
+          if (currentProjectId === null) {
+            return Task.fail(new NoActiveProjectError(id)).pipe(Task.runResult);
+          }
 
-        return resolveBook(database, currentProjectId, id).pipe(
-          Task.tap(setWorkspaceSelection),
-          Task.asVoid,
-          Task.run,
-        );
-      });
+          return resolveBook(database, currentProjectId, id).pipe(
+            Task.tap(setWorkspaceSelection),
+            Task.asVoid,
+            Task.runResult,
+          );
+        }),
+      );
     },
 
     selectScene(id: string) {
       const currentProjectId = untrack(() => selectedProject()?.id ?? null);
       const currentBookId = untrack(() => selectedBook()?.id ?? null);
 
-      return queue.enqueue<ResultType<void, SelectSceneError>>(() => {
-        if (currentBookId === null) {
-          return Task.fail(new NoActiveBookError(id)).pipe(Task.run);
-        }
-        if (currentProjectId === null) {
-          return Task.fail(new NoActiveProjectError(currentBookId)).pipe(
-            Task.run,
-          );
-        }
+      return Task.make(() =>
+        queue.enqueue<ResultType<void, SelectSceneError>>(() => {
+          if (currentBookId === null) {
+            return Task.fail(new NoActiveBookError(id)).pipe(Task.runResult);
+          }
+          if (currentProjectId === null) {
+            return Task.fail(new NoActiveProjectError(currentBookId)).pipe(
+              Task.runResult,
+            );
+          }
 
-        return resolveScene(database, currentProjectId, currentBookId, id).pipe(
-          Task.tap(setWorkspaceSelection),
-          Task.asVoid,
-          Task.run,
-        );
-      });
+          return resolveScene(
+            database,
+            currentProjectId,
+            currentBookId,
+            id,
+          ).pipe(
+            Task.tap(setWorkspaceSelection),
+            Task.asVoid,
+            Task.runResult,
+          );
+        }),
+      );
     },
   };
 
@@ -312,7 +323,7 @@ function resolveProject(db: DbTypes.AppDatabase, projectId: string) {
           bookId: resolvedBookId,
           sceneId: resolvedSceneId,
         };
-      }).pipe(Task.run),
+      }).pipe(Task.runResult),
     ),
   );
 }
@@ -361,7 +372,7 @@ function resolveBook(
           bookId: book.id,
           sceneId: resolvedSceneId,
         };
-      }).pipe(Task.run),
+      }).pipe(Task.runResult),
     ),
   );
 }
@@ -415,7 +426,7 @@ function resolveScene(
           bookId: book.id,
           sceneId: scene.id,
         };
-      }).pipe(Task.run),
+      }).pipe(Task.runResult),
     ),
   );
 }
@@ -452,6 +463,7 @@ function resolveRememberedBook(
   }
 
   return BookRepository.listByProject(booksTable, project.id).pipe(
+    TaskArray.sortByString('position'),
     Task.map((activeBooks) => activeBooks[activeBooks.length - 1] ?? null),
   );
 }
@@ -488,6 +500,7 @@ function resolveRememberedScene(
   }
 
   return SceneRepository.listByBook(scenesTable, book.id).pipe(
+    TaskArray.sortByString('position'),
     Task.map((activeScenes) => activeScenes[activeScenes.length - 1] ?? null),
   );
 }

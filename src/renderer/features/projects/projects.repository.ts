@@ -3,18 +3,11 @@ import { Result, Task } from '@/shared/utils/task';
 import { ProjectNotFoundError } from './projects.errors';
 
 export interface ListProjectsOptions {
-  includeTombstones?: boolean;
-  orderBy?: 'createdAt' | 'updatedAt' | 'title';
+  orderBy?: 'updated_at';
   direction?: 'ascending' | 'descending';
   offset?: number;
   limit?: number;
 }
-
-const orderFields = {
-  createdAt: 'created_at',
-  updatedAt: 'updated_at',
-  title: 'title',
-} as const;
 
 export const ProjectRepository = {
   list: Task.fn(
@@ -22,8 +15,27 @@ export const ProjectRepository = {
       projects: DbTypes.ProjectsTable,
       options: ListProjectsOptions = {},
     ) => {
-      const rows = await projects.toArray();
-      return applyListOptions(rows, options);
+      let collection = options.orderBy
+        ? projects.orderBy(options.orderBy)
+        : projects.toCollection();
+
+      collection = collection.filter(
+        (project) => project.deleted_at === null,
+      );
+
+      if (options.direction === 'descending') {
+        collection = collection.reverse();
+      }
+
+      if (options.offset !== undefined) {
+        collection = collection.offset(Math.max(0, options.offset));
+      }
+
+      if (options.limit !== undefined) {
+        collection = collection.limit(Math.max(0, options.limit));
+      }
+
+      return collection.toArray();
     },
   ),
 
@@ -51,28 +63,3 @@ export const ProjectRepository = {
     },
   ),
 } as const;
-
-function applyListOptions(
-  projects: DbTypes.LocalProject[],
-  options: ListProjectsOptions,
-) {
-  const orderField = orderFields[options.orderBy ?? 'createdAt'];
-  const direction = options.direction === 'descending' ? -1 : 1;
-  const offset = Math.max(0, options.offset ?? 0);
-  const limit =
-    options.limit === undefined ? undefined : Math.max(0, options.limit);
-
-  const ordered = projects
-    .filter(
-      (project) => options.includeTombstones || project.deleted_at === null,
-    )
-    .sort(
-      (left, right) =>
-        left[orderField].localeCompare(right[orderField]) * direction,
-    );
-
-  return ordered.slice(
-    offset,
-    limit === undefined ? undefined : offset + limit,
-  );
-}

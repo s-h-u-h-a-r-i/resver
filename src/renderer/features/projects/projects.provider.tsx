@@ -10,7 +10,7 @@ import {
 import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
-import { Task, type ResultType } from '@/shared/utils/task';
+import { Task, TaskArray } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
 import { ProjectNotFoundError } from './projects.errors';
 import { ProjectRepository } from './projects.repository';
@@ -26,12 +26,12 @@ type UpdateProjectInput = Partial<
 interface ProjectsContextValue {
   projects: Accessor<DbTypes.LocalProject[]>;
 
-  createProject(input: CreateProjectInput): Promise<ResultType<string>>;
+  createProject(input: CreateProjectInput): Task<string>;
   updateProject(
     id: string,
     input: UpdateProjectInput,
-  ): Promise<ResultType<void, ProjectNotFoundError>>;
-  deleteProject(id: string): Promise<ResultType<void, ProjectNotFoundError>>;
+  ): Task<void, ProjectNotFoundError>;
+  deleteProject(id: string): Task<void, ProjectNotFoundError>;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue>();
@@ -41,7 +41,10 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const database = untrack(() => props.db);
   const projects = createLiveQuery(() =>
-    ProjectRepository.list(database.projects).pipe(Task.runOrThrow),
+    ProjectRepository.list(database.projects).pipe(
+      TaskArray.sortByString('created_at'),
+      Task.run,
+    ),
   );
 
   const actions: Omit<ProjectsContextValue, 'projects'> = {
@@ -58,7 +61,6 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         updated_at: now,
       }).pipe(
         Task.map(() => id),
-        Task.run,
       );
     },
 
@@ -71,7 +73,7 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           description: input.description,
           updated_at: new Date().toISOString(),
         }),
-      ).pipe(Task.run);
+      );
     },
 
     deleteProject(id) {
@@ -79,7 +81,7 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
       return ProjectRepository.update(database.projects, id, {
         deleted_at: now,
         updated_at: now,
-      }).pipe(Task.run);
+      });
     },
   };
 

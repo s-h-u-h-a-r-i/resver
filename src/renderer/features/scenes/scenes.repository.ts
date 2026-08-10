@@ -3,25 +3,36 @@ import { Result, Task } from '@/shared/utils/task';
 import { SceneNotFoundError } from './scenes.errors';
 
 export interface ListScenesOptions {
-  includeTombstones?: boolean;
-  orderBy?: 'position' | 'createdAt' | 'updatedAt' | 'title';
+  orderBy?: 'updated_at';
   direction?: 'ascending' | 'descending';
   offset?: number;
   limit?: number;
 }
 
-const orderFields = {
-  position: 'position',
-  createdAt: 'created_at',
-  updatedAt: 'updated_at',
-  title: 'title',
-} as const;
+export type ListScenesByBookOptions = Omit<ListScenesOptions, 'orderBy'>;
 
 export const SceneRepository = {
   list: Task.fn(
     async (scenes: DbTypes.ScenesTable, options: ListScenesOptions = {}) => {
-      const rows = await scenes.toArray();
-      return applyListOptions(rows, options);
+      let collection = options.orderBy
+        ? scenes.orderBy(options.orderBy)
+        : scenes.toCollection();
+
+      collection = collection.filter((scene) => scene.deleted_at === null);
+
+      if (options.direction === 'descending') {
+        collection = collection.reverse();
+      }
+
+      if (options.offset !== undefined) {
+        collection = collection.offset(Math.max(0, options.offset));
+      }
+
+      if (options.limit !== undefined) {
+        collection = collection.limit(Math.max(0, options.limit));
+      }
+
+      return collection.toArray();
     },
   ),
 
@@ -29,10 +40,25 @@ export const SceneRepository = {
     async (
       scenes: DbTypes.ScenesTable,
       bookId: string,
-      options: ListScenesOptions = {},
+      options: ListScenesByBookOptions = {},
     ) => {
-      const rows = await scenes.where('book_id').equals(bookId).toArray();
-      return applyListOptions(rows, options);
+      let collection = scenes.where('book_id').equals(bookId);
+
+      collection = collection.filter((scene) => scene.deleted_at === null);
+
+      if (options.direction === 'descending') {
+        collection = collection.reverse();
+      }
+
+      if (options.offset !== undefined) {
+        collection = collection.offset(Math.max(0, options.offset));
+      }
+
+      if (options.limit !== undefined) {
+        collection = collection.limit(Math.max(0, options.limit));
+      }
+
+      return collection.toArray();
     },
   ),
 
@@ -60,26 +86,3 @@ export const SceneRepository = {
     },
   ),
 } as const;
-
-function applyListOptions(
-  scenes: DbTypes.LocalScene[],
-  options: ListScenesOptions,
-) {
-  const orderField = orderFields[options.orderBy ?? 'position'];
-  const direction = options.direction === 'descending' ? -1 : 1;
-  const offset = Math.max(0, options.offset ?? 0);
-  const limit =
-    options.limit === undefined ? undefined : Math.max(0, options.limit);
-
-  const ordered = scenes
-    .filter((scene) => options.includeTombstones || scene.deleted_at === null)
-    .sort(
-      (left, right) =>
-        left[orderField].localeCompare(right[orderField]) * direction,
-    );
-
-  return ordered.slice(
-    offset,
-    limit === undefined ? undefined : offset + limit,
-  );
-}

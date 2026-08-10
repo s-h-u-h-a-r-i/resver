@@ -11,7 +11,7 @@ import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
-import { Task, type ResultType } from '@/shared/utils/task';
+import { Task, TaskArray } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
 import { SceneNotFoundError } from './scenes.errors';
 import { SceneRepository } from './scenes.repository';
@@ -24,17 +24,17 @@ type UpdateSceneInput = Partial<
 interface ScenesContextValue {
   scenes: Accessor<DbTypes.LocalScene[]>;
 
-  createScene(input: CreateSceneInput): Promise<ResultType<string>>;
+  createScene(input: CreateSceneInput): Task<string>;
   updateScene(
     id: string,
     input: UpdateSceneInput,
-  ): Promise<ResultType<void, SceneNotFoundError>>;
+  ): Task<void, SceneNotFoundError>;
   moveScene(
     id: string,
     prevSceneId: string | undefined,
     nextSceneId: string | undefined,
-  ): Promise<ResultType<void, SceneNotFoundError>>;
-  deleteScene(id: string): Promise<ResultType<void, SceneNotFoundError>>;
+  ): Task<void, SceneNotFoundError>;
+  deleteScene(id: string): Task<void, SceneNotFoundError>;
 }
 
 const ScenesContext = createContext<ScenesContextValue>();
@@ -44,7 +44,10 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const database = untrack(() => props.db);
   const scenes = createLiveQuery(() =>
-    SceneRepository.list(database.scenes).pipe(Task.runOrThrow),
+    SceneRepository.list(database.scenes).pipe(
+      TaskArray.sortByString('position'),
+      Task.run,
+    ),
   );
 
   const actions: Omit<ScenesContextValue, 'scenes'> = {
@@ -53,7 +56,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         const bookScenes = yield* SceneRepository.listByBook(
           database.scenes,
           input.bookId,
-        );
+        ).pipe(TaskArray.sortByString('position'));
         const position = generateKeyBetween(
           bookScenes[bookScenes.length - 1]?.position,
           undefined,
@@ -74,7 +77,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         });
 
         return id;
-      }).pipe(Task.run);
+      });
     },
 
     updateScene(id, input) {
@@ -87,48 +90,52 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           word_count: input.wordCount,
           updated_at: new Date().toISOString(),
         }),
-      ).pipe(Task.run);
+      );
     },
 
     moveScene(id, prevSceneId, nextSceneId) {
-      return database.transaction('rw', database.scenes, async (trans) => {
-        return Task.gen(function* () {
-          const scene = yield* SceneRepository.get(trans.scenes, id);
-          if (scene.deleted_at !== null) {
-            return yield* Task.fail(new SceneNotFoundError(id));
-          }
+      return Task.make(() =>
+        database.transaction('rw', database.scenes, async (trans) =>
+          Task.gen(function* () {
+            const scene = yield* SceneRepository.get(trans.scenes, id);
+            if (scene.deleted_at !== null) {
+              return yield* Task.fail(new SceneNotFoundError(id));
+            }
 
-          const siblings = (yield* SceneRepository.listByBook(
-            trans.scenes,
-            scene.book_id,
-          )).filter((sibling) => sibling.id !== id);
+            const siblings = (yield* SceneRepository.listByBook(
+              trans.scenes,
+              scene.book_id,
+            ).pipe(TaskArray.sortByString('position'))).filter(
+              (sibling) => sibling.id !== id,
+            );
 
-          const prevIndex =
-            prevSceneId === undefined
-              ? -1
-              : siblings.findIndex((sibling) => sibling.id === prevSceneId);
-          const nextIndex =
-            nextSceneId === undefined
-              ? siblings.length
-              : siblings.findIndex((sibling) => sibling.id === nextSceneId);
+            const prevIndex =
+              prevSceneId === undefined
+                ? -1
+                : siblings.findIndex((sibling) => sibling.id === prevSceneId);
+            const nextIndex =
+              nextSceneId === undefined
+                ? siblings.length
+                : siblings.findIndex((sibling) => sibling.id === nextSceneId);
 
-          if (
-            (prevSceneId !== undefined && prevIndex === -1) ||
-            (nextSceneId !== undefined && nextIndex === -1) ||
-            nextIndex !== prevIndex + 1
-          ) {
-            return;
-          }
+            if (
+              (prevSceneId !== undefined && prevIndex === -1) ||
+              (nextSceneId !== undefined && nextIndex === -1) ||
+              nextIndex !== prevIndex + 1
+            ) {
+              return;
+            }
 
-          yield* SceneRepository.update(trans.scenes, id, {
-            position: generateKeyBetween(
-              siblings[prevIndex]?.position,
-              siblings[nextIndex]?.position,
-            ),
-            updated_at: new Date().toISOString(),
-          });
-        }).pipe(Task.run);
-      });
+            yield* SceneRepository.update(trans.scenes, id, {
+              position: generateKeyBetween(
+                siblings[prevIndex]?.position,
+                siblings[nextIndex]?.position,
+              ),
+              updated_at: new Date().toISOString(),
+            });
+          }).pipe(Task.runResult),
+        ),
+      );
     },
 
     deleteScene(id) {
@@ -136,7 +143,7 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
       return SceneRepository.update(database.scenes, id, {
         deleted_at: now,
         updated_at: now,
-      }).pipe(Task.run);
+      });
     },
   };
 
