@@ -13,7 +13,7 @@ import {
 
 import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
-import { Task, TaskArray, type ResultType } from '@/shared/utils/task';
+import { Task, TaskArray, TaskQueue } from '@/shared/utils/task';
 import {
   BookNotFoundError,
   BookNotInProjectError,
@@ -131,7 +131,7 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     return result.sceneId === activeSceneId() ? result.paragraphs : undefined;
   });
 
-  const queue = createOperationQueue();
+  const queue = TaskQueue.make();
 
   createEffect(
     on(
@@ -174,14 +174,14 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           state.bookCheckpoint !== state.effective.sceneId;
         if (!requiresRepair) return;
 
-        void queue.enqueue(async () => {
-          setWorkspaceSelection(
-            await resolveProject(database, effectiveProjectId).pipe(
+        void queue
+          .enqueue(() =>
+            resolveProject(database, effectiveProjectId).pipe(
+              Task.tap(setWorkspaceSelection),
               Task.tapError((error) => console.error(error.message)),
-              Task.runOrThrow,
             ),
-          );
-        });
+          )
+          .pipe(Task.runOrThrow);
       },
       { defer: true },
     ),
@@ -191,19 +191,20 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     const currentProjects = projects();
     const initialProject = currentProjects[currentProjects.length - 1];
 
-    void queue.enqueue(async () => {
-      if (initialProject) {
-        setWorkspaceSelection(
-          await resolveProject(database, initialProject.id).pipe(
-            Task.tapError((error) => console.error(error.message)),
-            Task.runOrThrow,
-          ),
-        );
-      } else {
-        setWorkspaceSelection(createEmptySelection());
-      }
-      setInitialized(true);
-    });
+    void queue
+      .enqueue(() =>
+        Task.gen(function* () {
+          if (initialProject) {
+            setWorkspaceSelection(
+              yield* resolveProject(database, initialProject.id),
+            );
+          } else {
+            setWorkspaceSelection(createEmptySelection());
+          }
+          setInitialized(true);
+        }).pipe(Task.tapError((error) => console.error(error.message))),
+      )
+      .pipe(Task.runOrThrow);
   });
 
   const value: WorkspaceContextValue = {
@@ -213,61 +214,47 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     sceneParagraphs,
 
     selectProject(id) {
-      return Task.make(() =>
-        queue.enqueue(() =>
-          resolveProject(database, id).pipe(
-            Task.tap(setWorkspaceSelection),
-            Task.asVoid,
-            Task.runResult,
-          ),
+      return queue.enqueue(() =>
+        resolveProject(database, id).pipe(
+          Task.tap(setWorkspaceSelection),
+          Task.asVoid,
         ),
       );
     },
 
     selectBook(id) {
-      const currentProjectId = untrack(() => selectedProject()?.id ?? null);
-      return Task.make(() =>
-        queue.enqueue<ResultType<void, SelectBookError>>(() => {
-          if (currentProjectId === null) {
-            return Task.fail(new NoActiveProjectError(id)).pipe(Task.runResult);
-          }
+      return queue.enqueue(() => {
+        const currentProjectId = untrack(() => selectedProject()?.id ?? null);
+        if (currentProjectId === null) {
+          return Task.fail(new NoActiveProjectError(id));
+        }
 
-          return resolveBook(database, currentProjectId, id).pipe(
-            Task.tap(setWorkspaceSelection),
-            Task.asVoid,
-            Task.runResult,
-          );
-        }),
-      );
+        return resolveBook(database, currentProjectId, id).pipe(
+          Task.tap(setWorkspaceSelection),
+          Task.asVoid,
+        );
+      });
     },
 
     selectScene(id: string) {
-      const currentProjectId = untrack(() => selectedProject()?.id ?? null);
-      const currentBookId = untrack(() => selectedBook()?.id ?? null);
+      return queue.enqueue(() => {
+        const currentProjectId = untrack(() => selectedProject()?.id ?? null);
+        const currentBookId = untrack(() => selectedBook()?.id ?? null);
 
-      return Task.make(() =>
-        queue.enqueue<ResultType<void, SelectSceneError>>(() => {
-          if (currentBookId === null) {
-            return Task.fail(new NoActiveBookError(id)).pipe(Task.runResult);
-          }
-          if (currentProjectId === null) {
-            return Task.fail(new NoActiveProjectError(currentBookId)).pipe(
-              Task.runResult,
-            );
-          }
+        if (currentBookId === null) {
+          return Task.fail(new NoActiveBookError(id));
+        }
+        if (currentProjectId === null) {
+          return Task.fail(new NoActiveProjectError(currentBookId));
+        }
 
-          return resolveScene(
-            database,
-            currentProjectId,
-            currentBookId,
-            id,
-          ).pipe(
-            Task.tap(setWorkspaceSelection),
-            Task.asVoid,
-            Task.runResult,
-          );
-        }),
-      );
+        return resolveScene(
+          database,
+          currentProjectId,
+          currentBookId,
+          id,
+        ).pipe(Task.tap(setWorkspaceSelection), Task.asVoid);
+      });
     },
   };
 
@@ -511,19 +498,4 @@ function createEmptySelection(): WorkspaceSelection {
 
 function findByIdOrLast<T extends { id: string }>(arr: T[], id: string | null) {
   return arr.find((item) => item.id === id) ?? arr[arr.length - 1] ?? null;
-}
-
-function createOperationQueue() {
-  let operationQueue = Promise.resolve();
-
-  function enqueue<T>(operation: () => Promise<T>) {
-    const result = operationQueue.then(operation);
-    operationQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
-
-  return { enqueue };
 }

@@ -1,4 +1,4 @@
-import { Task, type Task as TaskType } from './task';
+import { Task } from './task';
 
 export const TaskArray = {
   sortByString,
@@ -6,8 +6,8 @@ export const TaskArray = {
 
 function sortByString<const Key extends PropertyKey>(key: Key) {
   return <Item extends Record<Key, string>, E>(
-    task: TaskType<Item[], E>,
-  ): TaskType<Item[], E> =>
+    task: Task<Item[], E>,
+  ): Task<Item[], E> =>
     Task.map((items: Item[]) =>
       items
         .slice()

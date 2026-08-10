@@ -44,11 +44,16 @@ function isOk<R extends AnyResult>(
 const TaskTypeId: unique symbol = Symbol('TaskTypeId');
 const TaskRunId: unique symbol = Symbol('TaskRunId');
 
-type AnyTask = Task<unknown, unknown>;
+export type AnyTask = Task<unknown, unknown>;
 
-type TaskSuccess<T> = T extends Task<infer A, unknown> ? A : never;
+export type TaskSuccess<T> = T extends Task<infer A, unknown> ? A : never;
 
-type TaskFailure<T> = T extends Task<unknown, infer E> ? E : never;
+export type TaskFailure<T> = T extends Task<unknown, infer E> ? E : never;
+
+export type NormalizedTask<T extends AnyTask> = Task<
+  TaskSuccess<T>,
+  TaskFailure<T>
+>;
 
 type TaskSuccesses<Tasks extends readonly AnyTask[]> = {
   -readonly [Index in keyof Tasks]: TaskSuccess<Tasks[Index]>;
