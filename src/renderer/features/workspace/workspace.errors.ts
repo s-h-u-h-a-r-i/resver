@@ -1,9 +1,9 @@
-import { Result } from '@/shared/utils/result';
+import { Task } from '@/shared/utils/task';
 import type { BookNotFoundError, BookNotInProjectError } from '../books';
 import type { ProjectNotFoundError } from '../projects';
 import type { SceneNotFoundError, SceneNotInBookError } from '../scenes';
 
-export class MissingBookReferenceError extends Result.Error(
+export class MissingBookReferenceError extends Task.Error(
   'missingBookReference',
 ) {
   constructor(
@@ -14,7 +14,7 @@ export class MissingBookReferenceError extends Result.Error(
   }
 }
 
-export class MissingSceneReferenceError extends Result.Error(
+export class MissingSceneReferenceError extends Task.Error(
   'missingSceneReference',
 ) {
   constructor(
@@ -25,13 +25,13 @@ export class MissingSceneReferenceError extends Result.Error(
   }
 }
 
-export class NoActiveProjectError extends Result.Error('noActiveProject') {
+export class NoActiveProjectError extends Task.Error('noActiveProject') {
   constructor(readonly bookId: string) {
     super(`Cannot select book "${bookId}" without an active project`);
   }
 }
 
-export class NoActiveBookError extends Result.Error('noActiveBook') {
+export class NoActiveBookError extends Task.Error('noActiveBook') {
   constructor(readonly sceneId: string) {
     super(`Cannot select scene "${sceneId}" without an active book`);
   }
@@ -45,6 +45,7 @@ export type ResolveRememberedSceneError =
 
 export type SelectProjectError =
   | ProjectNotFoundError
+  | BookNotFoundError
   | ResolveRememberedBookError
   | ResolveRememberedSceneError;
 

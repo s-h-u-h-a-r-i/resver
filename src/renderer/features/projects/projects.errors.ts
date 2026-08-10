@@ -1,6 +1,6 @@
-import { Result } from '@/shared/utils/result';
+import { Task } from '@/shared/utils/task';
 
-export class ProjectNotFoundError extends Result.Error('projectNotFound') {
+export class ProjectNotFoundError extends Task.Error('projectNotFound') {
   constructor(readonly projectId: string) {
     super(`Project "${projectId}" not found`);
   }

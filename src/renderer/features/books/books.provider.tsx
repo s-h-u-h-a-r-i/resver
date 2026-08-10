@@ -1,6 +1,7 @@
 import {
   createContext,
   Show,
+  untrack,
   useContext,
   type Accessor,
   type ParentComponent,
@@ -9,19 +10,25 @@ import {
 import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
+import { Task, type ResultType } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
+import { BookNotFoundError } from './books.errors';
+import { BookRepository } from './books.repository';
 
 interface BooksContextValue {
   books: Accessor<DbTypes.LocalBook[]>;
 
-  createBook(projectId: string, title: string): Promise<string>;
-  updateBook(id: string, title: string): Promise<void>;
+  createBook(projectId: string, title: string): Promise<ResultType<string>>;
+  updateBook(
+    id: string,
+    title: string,
+  ): Promise<ResultType<void, BookNotFoundError>>;
   moveBook(
     id: string,
     prevBookId: string | undefined,
     nextBookId: string | undefined,
-  ): Promise<void>;
-  deleteBook(id: string): Promise<void>;
+  ): Promise<ResultType<void, BookNotFoundError>>;
+  deleteBook(id: string): Promise<ResultType<void, BookNotFoundError>>;
 }
 
 const BooksContext = createContext<BooksContextValue>();
@@ -29,78 +36,94 @@ const BooksContext = createContext<BooksContextValue>();
 export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
+  const database = untrack(() => props.db);
   const books = createLiveQuery(() =>
-    props.db.books.filter((b) => b.deleted_at === null).sortBy('position'),
+    BookRepository.list(database.books).pipe(Task.runOrThrow),
   );
 
   const actions: Omit<BooksContextValue, 'books'> = {
-    async createBook(projectId, title) {
-      const projectBooks = await listBooksByProject(props.db.books, projectId);
-      const position = generateKeyBetween(
-        projectBooks[projectBooks.length - 1]?.position,
-        undefined,
-      );
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      await props.db.books.add({
-        id,
-        project_id: projectId,
-        title,
-        position,
-        last_visited_scene_id: null,
-        deleted_at: null,
-        updated_at: now,
-        created_at: now,
-      });
-      return id;
+    createBook(projectId, title) {
+      return Task.gen(function* () {
+        const projectBooks = yield* BookRepository.listByProject(
+          database.books,
+          projectId,
+        );
+        const position = generateKeyBetween(
+          projectBooks[projectBooks.length - 1]?.position,
+          undefined,
+        );
+        const now = new Date().toISOString();
+        const id = crypto.randomUUID();
+
+        yield* BookRepository.add(database.books, {
+          id,
+          project_id: projectId,
+          title,
+          position,
+          last_visited_scene_id: null,
+          deleted_at: null,
+          updated_at: now,
+          created_at: now,
+        });
+
+        return id;
+      }).pipe(Task.run);
     },
 
-    async updateBook(id, title) {
-      await props.db.books.update(id, {
+    updateBook(id, title) {
+      return BookRepository.update(database.books, id, {
         title,
         updated_at: new Date().toISOString(),
+      }).pipe(Task.run);
+    },
+
+    moveBook(id, prevBookId, nextBookId) {
+      return database.transaction('rw', database.books, async (trans) => {
+        return Task.gen(function* () {
+          const book = yield* BookRepository.get(trans.books, id);
+          if (book.deleted_at !== null) {
+            return yield* Task.fail(new BookNotFoundError(id));
+          }
+
+          const siblings = (yield* BookRepository.listByProject(
+            trans.books,
+            book.project_id,
+          )).filter((sibling) => sibling.id !== id);
+
+          const prevIndex =
+            prevBookId === undefined
+              ? -1
+              : siblings.findIndex((sibling) => sibling.id === prevBookId);
+          const nextIndex =
+            nextBookId === undefined
+              ? siblings.length
+              : siblings.findIndex((sibling) => sibling.id === nextBookId);
+
+          if (
+            (prevBookId !== undefined && prevIndex === -1) ||
+            (nextBookId !== undefined && nextIndex === -1) ||
+            nextIndex !== prevIndex + 1
+          ) {
+            return;
+          }
+
+          yield* BookRepository.update(trans.books, id, {
+            position: generateKeyBetween(
+              siblings[prevIndex]?.position,
+              siblings[nextIndex]?.position,
+            ),
+            updated_at: new Date().toISOString(),
+          });
+        }).pipe(Task.run);
       });
     },
 
-    async moveBook(id, prevBookId, nextBookId) {
-      await props.db.transaction('rw', props.db.books, async (trans) => {
-        const book = await trans.books.get(id);
-        if (!book || book.deleted_at !== null) return;
-
-        const siblings = (
-          await listBooksByProject(trans.books, book.project_id)
-        ).filter((b) => b.id !== id);
-
-        const prevIndex =
-          prevBookId === undefined
-            ? -1
-            : siblings.findIndex((b) => b.id === prevBookId);
-        const nextIndex =
-          nextBookId === undefined
-            ? siblings.length
-            : siblings.findIndex((b) => b.id === nextBookId);
-
-        if (
-          (prevBookId !== undefined && prevIndex === -1) ||
-          (nextBookId !== undefined && nextIndex === -1) ||
-          nextIndex !== prevIndex + 1
-        ) {
-          return;
-        }
-
-        await trans.books.update(id, {
-          position: generateKeyBetween(
-            siblings[prevIndex]?.position,
-            siblings[nextIndex]?.position,
-          ),
-          updated_at: new Date().toISOString(),
-        });
-      });
-    },
-
-    async deleteBook(id) {
+    deleteBook(id) {
       const now = new Date().toISOString();
-      await props.db.books.update(id, { deleted_at: now, updated_at: now });
+      return BookRepository.update(database.books, id, {
+        deleted_at: now,
+        updated_at: now,
+      }).pipe(Task.run);
     },
   };
 
@@ -123,12 +146,4 @@ export function useBooks() {
     );
   }
   return ctx;
-}
-
-function listBooksByProject(books: DbTypes.BooksTable, projectId: string) {
-  return books
-    .where('project_id')
-    .equals(projectId)
-    .and((b) => b.deleted_at === null)
-    .sortBy('position');
 }

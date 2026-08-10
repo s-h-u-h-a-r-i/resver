@@ -1,6 +1,7 @@
 import {
   createContext,
   Show,
+  untrack,
   useContext,
   type Accessor,
   type ParentComponent,
@@ -9,7 +10,10 @@ import {
 import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import { Task, type ResultType } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
+import { ProjectNotFoundError } from './projects.errors';
+import { ProjectRepository } from './projects.repository';
 
 type CreateProjectInput = Pick<
   DbTypes.LocalProjectCamel,
@@ -22,9 +26,12 @@ type UpdateProjectInput = Partial<
 interface ProjectsContextValue {
   projects: Accessor<DbTypes.LocalProject[]>;
 
-  createProject(input: CreateProjectInput): Promise<string>;
-  updateProject(id: string, input: UpdateProjectInput): Promise<void>;
-  deleteProject(id: string): Promise<void>;
+  createProject(input: CreateProjectInput): Promise<ResultType<string>>;
+  updateProject(
+    id: string,
+    input: UpdateProjectInput,
+  ): Promise<ResultType<void, ProjectNotFoundError>>;
+  deleteProject(id: string): Promise<ResultType<void, ProjectNotFoundError>>;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue>();
@@ -32,15 +39,16 @@ const ProjectsContext = createContext<ProjectsContextValue>();
 export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
+  const database = untrack(() => props.db);
   const projects = createLiveQuery(() =>
-    props.db.projects.filter((p) => p.deleted_at === null).sortBy('created_at'),
+    ProjectRepository.list(database.projects).pipe(Task.runOrThrow),
   );
 
   const actions: Omit<ProjectsContextValue, 'projects'> = {
-    async createProject(input) {
+    createProject(input) {
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
-      await props.db.projects.add({
+      return ProjectRepository.add(database.projects, {
         id,
         title: input.title,
         description: input.description,
@@ -48,27 +56,30 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         deleted_at: null,
         created_at: now,
         updated_at: now,
-      });
-      return id;
+      }).pipe(
+        Task.map(() => id),
+        Task.run,
+      );
     },
 
-    async updateProject(id, input) {
-      await props.db.projects.update(
+    updateProject(id, input) {
+      return ProjectRepository.update(
+        database.projects,
         id,
         omitUndefined<DbTypes.ProjectUpdate>({
           title: input.title,
           description: input.description,
           updated_at: new Date().toISOString(),
         }),
-      );
+      ).pipe(Task.run);
     },
 
-    async deleteProject(id) {
+    deleteProject(id) {
       const now = new Date().toISOString();
-      await props.db.projects.update(id, {
+      return ProjectRepository.update(database.projects, id, {
         deleted_at: now,
         updated_at: now,
-      });
+      }).pipe(Task.run);
     },
   };
 

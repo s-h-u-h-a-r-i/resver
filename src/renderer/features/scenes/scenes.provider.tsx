@@ -1,6 +1,7 @@
 import {
   createContext,
   Show,
+  untrack,
   useContext,
   type Accessor,
   type ParentComponent,
@@ -10,7 +11,10 @@ import type * as DbTypes from '@/renderer/core/database';
 import { createLiveQuery } from '@/renderer/core/database';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
+import { Task, type ResultType } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
+import { SceneNotFoundError } from './scenes.errors';
+import { SceneRepository } from './scenes.repository';
 
 type CreateSceneInput = Pick<DbTypes.LocalSceneCamel, 'title' | 'bookId'>;
 type UpdateSceneInput = Partial<
@@ -20,14 +24,17 @@ type UpdateSceneInput = Partial<
 interface ScenesContextValue {
   scenes: Accessor<DbTypes.LocalScene[]>;
 
-  createScene(input: CreateSceneInput): Promise<string>;
-  updateScene(id: string, input: UpdateSceneInput): Promise<void>;
+  createScene(input: CreateSceneInput): Promise<ResultType<string>>;
+  updateScene(
+    id: string,
+    input: UpdateSceneInput,
+  ): Promise<ResultType<void, SceneNotFoundError>>;
   moveScene(
     id: string,
     prevSceneId: string | undefined,
     nextSceneId: string | undefined,
-  ): Promise<void>;
-  deleteScene(id: string): Promise<void>;
+  ): Promise<ResultType<void, SceneNotFoundError>>;
+  deleteScene(id: string): Promise<ResultType<void, SceneNotFoundError>>;
 }
 
 const ScenesContext = createContext<ScenesContextValue>();
@@ -35,35 +42,44 @@ const ScenesContext = createContext<ScenesContextValue>();
 export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   props,
 ) => {
+  const database = untrack(() => props.db);
   const scenes = createLiveQuery(() =>
-    props.db.scenes.filter((s) => s.deleted_at === null).sortBy('position'),
+    SceneRepository.list(database.scenes).pipe(Task.runOrThrow),
   );
 
   const actions: Omit<ScenesContextValue, 'scenes'> = {
-    async createScene(input) {
-      const bookScenes = await listScenesByBook(props.db.scenes, input.bookId);
-      const position = generateKeyBetween(
-        bookScenes[bookScenes.length - 1]?.position,
-        undefined,
-      );
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      await props.db.scenes.add({
-        id,
-        book_id: input.bookId,
-        title: input.title,
-        position,
-        status: 'draft',
-        word_count: 0,
-        deleted_at: null,
-        created_at: now,
-        updated_at: now,
-      });
-      return id;
+    createScene(input) {
+      return Task.gen(function* () {
+        const bookScenes = yield* SceneRepository.listByBook(
+          database.scenes,
+          input.bookId,
+        );
+        const position = generateKeyBetween(
+          bookScenes[bookScenes.length - 1]?.position,
+          undefined,
+        );
+        const now = new Date().toISOString();
+        const id = crypto.randomUUID();
+
+        yield* SceneRepository.add(database.scenes, {
+          id,
+          book_id: input.bookId,
+          title: input.title,
+          position,
+          status: 'draft',
+          word_count: 0,
+          deleted_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+
+        return id;
+      }).pipe(Task.run);
     },
 
-    async updateScene(id, input) {
-      await props.db.scenes.update(
+    updateScene(id, input) {
+      return SceneRepository.update(
+        database.scenes,
         id,
         omitUndefined<DbTypes.SceneUpdate>({
           status: input.status,
@@ -71,51 +87,56 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           word_count: input.wordCount,
           updated_at: new Date().toISOString(),
         }),
-      );
+      ).pipe(Task.run);
     },
 
-    async moveScene(id, prevSceneId, nextSceneId) {
-      await props.db.transaction('rw', props.db.scenes, async (trans) => {
-        const scene = await trans.scenes.get(id);
-        if (!scene || scene.deleted_at !== null) return;
+    moveScene(id, prevSceneId, nextSceneId) {
+      return database.transaction('rw', database.scenes, async (trans) => {
+        return Task.gen(function* () {
+          const scene = yield* SceneRepository.get(trans.scenes, id);
+          if (scene.deleted_at !== null) {
+            return yield* Task.fail(new SceneNotFoundError(id));
+          }
 
-        const siblings = (
-          await listScenesByBook(trans.scenes, scene.book_id)
-        ).filter((s) => s.id !== id);
+          const siblings = (yield* SceneRepository.listByBook(
+            trans.scenes,
+            scene.book_id,
+          )).filter((sibling) => sibling.id !== id);
 
-        const prevIndex =
-          prevSceneId === undefined
-            ? -1
-            : siblings.findIndex((s) => s.id === prevSceneId);
-        const nextIndex =
-          nextSceneId === undefined
-            ? siblings.length
-            : siblings.findIndex((s) => s.id === nextSceneId);
+          const prevIndex =
+            prevSceneId === undefined
+              ? -1
+              : siblings.findIndex((sibling) => sibling.id === prevSceneId);
+          const nextIndex =
+            nextSceneId === undefined
+              ? siblings.length
+              : siblings.findIndex((sibling) => sibling.id === nextSceneId);
 
-        if (
-          (prevSceneId !== undefined && prevIndex === -1) ||
-          (nextSceneId !== undefined && nextIndex === -1) ||
-          nextIndex !== prevIndex + 1
-        ) {
-          return;
-        }
+          if (
+            (prevSceneId !== undefined && prevIndex === -1) ||
+            (nextSceneId !== undefined && nextIndex === -1) ||
+            nextIndex !== prevIndex + 1
+          ) {
+            return;
+          }
 
-        await trans.scenes.update(id, {
-          position: generateKeyBetween(
-            siblings[prevIndex]?.position,
-            siblings[nextIndex]?.position,
-          ),
-          updated_at: new Date().toISOString(),
-        });
+          yield* SceneRepository.update(trans.scenes, id, {
+            position: generateKeyBetween(
+              siblings[prevIndex]?.position,
+              siblings[nextIndex]?.position,
+            ),
+            updated_at: new Date().toISOString(),
+          });
+        }).pipe(Task.run);
       });
     },
 
-    async deleteScene(id) {
+    deleteScene(id) {
       const now = new Date().toISOString();
-      await props.db.scenes.update(id, {
+      return SceneRepository.update(database.scenes, id, {
         deleted_at: now,
         updated_at: now,
-      });
+      }).pipe(Task.run);
     },
   };
 
@@ -138,12 +159,4 @@ export function useScenes() {
     );
   }
   return ctx;
-}
-
-function listScenesByBook(scenes: DbTypes.ScenesTable, bookId: string) {
-  return scenes
-    .where('book_id')
-    .equals(bookId)
-    .and((s) => s.deleted_at === null)
-    .sortBy('position');
 }

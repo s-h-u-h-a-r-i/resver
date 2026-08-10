@@ -1,12 +1,12 @@
-import { Result } from '@/shared/utils/result';
+import { Task } from '@/shared/utils/task';
 
-export class BookNotFoundError extends Result.Error('bookNotFound') {
+export class BookNotFoundError extends Task.Error('bookNotFound') {
   constructor(readonly bookId: string) {
     super(`Book "${bookId}" not found`);
   }
 }
 
-export class BookNotInProjectError extends Result.Error('bookNotInProject') {
+export class BookNotInProjectError extends Task.Error('bookNotInProject') {
   constructor(
     readonly bookId: string,
     readonly projectId: string,
