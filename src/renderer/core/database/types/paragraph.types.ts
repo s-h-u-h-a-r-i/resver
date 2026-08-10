@@ -1,4 +1,4 @@
-import type { EntityTable } from 'dexie';
+import type { EntityTable, InsertType, UpdateSpec } from 'dexie';
 
 export interface LocalParagraph {
   id: string;
@@ -11,3 +11,7 @@ export interface LocalParagraph {
 }
 
 export type ParagraphsTable = EntityTable<LocalParagraph, 'id'>;
+
+export type ParagraphInsert = InsertType<LocalParagraph, 'id'>;
+
+export type ParagraphUpdate = UpdateSpec<ParagraphInsert>;

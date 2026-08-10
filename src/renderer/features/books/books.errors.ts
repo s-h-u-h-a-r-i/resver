@@ -14,3 +14,9 @@ export class BookNotInProjectError extends Task.Error('bookNotInProject') {
     super(`Book "${bookId}" does not belong to project "${projectId}"`);
   }
 }
+
+export class InvalidBookMoveError extends Task.Error('invalidBookMove') {
+  constructor(readonly bookId: string) {
+    super(`Book "${bookId}" cannot be moved between the supplied boundaries`);
+  }
+}

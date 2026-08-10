@@ -12,7 +12,6 @@ import {
 } from 'solid-js';
 
 import type * as DbTypes from '@/renderer/core/database';
-import { createLiveQuery } from '@/renderer/core/database';
 import { Task, TaskArray, TaskQueue } from '@/shared/utils/task';
 import {
   BookNotFoundError,
@@ -51,7 +50,6 @@ interface WorkspaceContextValue {
   selectedProject: Accessor<DbTypes.LocalProject | null | undefined>;
   selectedBook: Accessor<DbTypes.LocalBook | null | undefined>;
   selectedScene: Accessor<DbTypes.LocalScene | null | undefined>;
-  sceneParagraphs: Accessor<DbTypes.LocalParagraph[] | null | undefined>;
 
   selectProject(id: string): Task<void, SelectProjectError>;
   selectBook(id: string): Task<void, SelectBookError>;
@@ -97,38 +95,6 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 
     const bookScenes = scenes().filter((scene) => scene.book_id === book.id);
     return findByIdOrLast(bookScenes, workspaceSelection().sceneId);
-  });
-
-  const activeSceneId = createMemo(() => {
-    const scene = selectedScene();
-    return scene === undefined ? undefined : (scene?.id ?? null);
-  });
-
-  const sceneParagraphQuery = createLiveQuery(
-    async ({ currentSceneId }) => {
-      if (currentSceneId === undefined) {
-        return { sceneId: undefined, paragraphs: undefined };
-      }
-      if (currentSceneId === null) {
-        return { sceneId: null, paragraphs: null };
-      }
-
-      const paragraphs = await database.paragraphs
-        .where('scene_id')
-        .equals(currentSceneId)
-        .and((paragraph) => paragraph.deleted_at === null)
-        .sortBy('position');
-      return { sceneId: currentSceneId, paragraphs };
-    },
-    {
-      dep: () => ({ currentSceneId: activeSceneId() }),
-      initial: { sceneId: undefined, paragraphs: undefined },
-    },
-  );
-
-  const sceneParagraphs = createMemo(() => {
-    const result = sceneParagraphQuery();
-    return result.sceneId === activeSceneId() ? result.paragraphs : undefined;
   });
 
   const queue = TaskQueue.make();
@@ -211,7 +177,6 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     selectedProject,
     selectedBook,
     selectedScene,
-    sceneParagraphs,
 
     selectProject: (id) =>
       queue.enqueue(() =>

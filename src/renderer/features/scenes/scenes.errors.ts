@@ -14,3 +14,9 @@ export class SceneNotInBookError extends Task.Error('sceneNotInBook') {
     super(`Scene "${sceneId}" does not belong to book "${bookId}"`);
   }
 }
+
+export class InvalidSceneMoveError extends Task.Error('invalidSceneMove') {
+  constructor(readonly sceneId: string) {
+    super(`Scene "${sceneId}" cannot be moved between the supplied boundaries`);
+  }
+}

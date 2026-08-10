@@ -48,41 +48,9 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   );
 
   const actions: Omit<ProjectsContextValue, 'projects'> = {
-    createProject(input) {
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID();
-      return ProjectRepository.add(database.projects, {
-        id,
-        title: input.title,
-        description: input.description,
-        last_visited_book_id: null,
-        deleted_at: null,
-        created_at: now,
-        updated_at: now,
-      }).pipe(
-        Task.map(() => id),
-      );
-    },
-
-    updateProject(id, input) {
-      return ProjectRepository.update(
-        database.projects,
-        id,
-        omitUndefined<DbTypes.ProjectUpdate>({
-          title: input.title,
-          description: input.description,
-          updated_at: new Date().toISOString(),
-        }),
-      );
-    },
-
-    deleteProject(id) {
-      const now = new Date().toISOString();
-      return ProjectRepository.update(database.projects, id, {
-        deleted_at: now,
-        updated_at: now,
-      });
-    },
+    createProject: (input) => createProject(database, input),
+    updateProject: (id, input) => updateProject(database, id, input),
+    deleteProject: (id) => deleteProject(database, id),
   };
 
   return (
@@ -108,3 +76,71 @@ export function useProjects() {
   }
   return ctx;
 }
+
+const createProject = (
+  database: DbTypes.AppDatabase,
+  input: CreateProjectInput,
+): Task<string> => {
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+
+  return ProjectRepository.add(database.projects, {
+    id,
+    title: input.title,
+    description: input.description,
+    last_visited_book_id: null,
+    deleted_at: null,
+    created_at: now,
+    updated_at: now,
+  }).pipe(Task.map(() => id));
+};
+
+const updateProject = Task.fn(
+  (
+    database: DbTypes.AppDatabase,
+    projectId: string,
+    input: UpdateProjectInput,
+  ) =>
+    database.transaction('rw', database.projects, (transaction) =>
+      Task.gen(function* () {
+        yield* requireActiveProject(transaction.projects, projectId);
+
+        yield* ProjectRepository.update(
+          transaction.projects,
+          projectId,
+          omitUndefined<DbTypes.ProjectUpdate>({
+            title: input.title,
+            description: input.description,
+            updated_at: new Date().toISOString(),
+          }),
+        );
+      }).pipe(Task.runResult),
+    ),
+);
+
+const deleteProject = Task.fn(
+  (database: DbTypes.AppDatabase, projectId: string) =>
+    database.transaction('rw', database.projects, (transaction) =>
+      Task.gen(function* () {
+        yield* requireActiveProject(transaction.projects, projectId);
+
+        const now = new Date().toISOString();
+        yield* ProjectRepository.update(transaction.projects, projectId, {
+          deleted_at: now,
+          updated_at: now,
+        });
+      }).pipe(Task.runResult),
+    ),
+);
+
+const requireActiveProject = (
+  projects: DbTypes.ProjectsTable,
+  projectId: string,
+) =>
+  Task.gen(function* () {
+    const project = yield* ProjectRepository.get(projects, projectId);
+    if (project.deleted_at !== null) {
+      return yield* Task.fail(new ProjectNotFoundError(projectId));
+    }
+    return project;
+  });
