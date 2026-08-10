@@ -42,8 +42,8 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   );
 
   const actions: Omit<BooksContextValue, 'books'> = {
-    createBook(projectId, title) {
-      return Task.gen(function* () {
+    createBook: (projectId, title) =>
+      Task.gen(function* () {
         const projectBooks = yield* BookRepository.listByProject(
           database.books,
           projectId,
@@ -67,18 +67,20 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         });
 
         return id;
-      });
-    },
+      }),
 
-    updateBook(id, title) {
-      return BookRepository.update(database.books, id, {
+    updateBook: (id, title) =>
+      BookRepository.update(database.books, id, {
         title,
         updated_at: new Date().toISOString(),
-      });
-    },
+      }),
 
-    moveBook(id, prevBookId, nextBookId) {
-      return Task.make(() =>
+    moveBook: Task.fn(
+      (
+        id: string,
+        prevBookId: string | undefined,
+        nextBookId: string | undefined,
+      ) =>
         database.transaction('rw', database.books, async (trans) =>
           Task.gen(function* () {
             const book = yield* BookRepository.get(trans.books, id);
@@ -119,10 +121,9 @@ export const BooksProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
             });
           }).pipe(Task.runResult),
         ),
-      );
-    },
+    ),
 
-    deleteBook(id) {
+    deleteBook: (id) => {
       const now = new Date().toISOString();
       return BookRepository.update(database.books, id, {
         deleted_at: now,

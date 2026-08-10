@@ -51,8 +51,8 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
   );
 
   const actions: Omit<ScenesContextValue, 'scenes'> = {
-    createScene(input) {
-      return Task.gen(function* () {
+    createScene: (input) =>
+      Task.gen(function* () {
         const bookScenes = yield* SceneRepository.listByBook(
           database.scenes,
           input.bookId,
@@ -77,11 +77,10 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         });
 
         return id;
-      });
-    },
+      }),
 
-    updateScene(id, input) {
-      return SceneRepository.update(
+    updateScene: (id, input) =>
+      SceneRepository.update(
         database.scenes,
         id,
         omitUndefined<DbTypes.SceneUpdate>({
@@ -90,11 +89,14 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           word_count: input.wordCount,
           updated_at: new Date().toISOString(),
         }),
-      );
-    },
+      ),
 
-    moveScene(id, prevSceneId, nextSceneId) {
-      return Task.make(() =>
+    moveScene: Task.fn(
+      (
+        id: string,
+        prevSceneId: string | undefined,
+        nextSceneId: string | undefined,
+      ) =>
         database.transaction('rw', database.scenes, async (trans) =>
           Task.gen(function* () {
             const scene = yield* SceneRepository.get(trans.scenes, id);
@@ -135,10 +137,9 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
             });
           }).pipe(Task.runResult),
         ),
-      );
-    },
+    ),
 
-    deleteScene(id) {
+    deleteScene: (id) => {
       const now = new Date().toISOString();
       return SceneRepository.update(database.scenes, id, {
         deleted_at: now,

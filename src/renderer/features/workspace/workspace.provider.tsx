@@ -213,17 +213,16 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
     selectedScene,
     sceneParagraphs,
 
-    selectProject(id) {
-      return queue.enqueue(() =>
+    selectProject: (id) =>
+      queue.enqueue(() =>
         resolveProject(database, id).pipe(
           Task.tap(setWorkspaceSelection),
           Task.asVoid,
         ),
-      );
-    },
+      ),
 
-    selectBook(id) {
-      return queue.enqueue(() => {
+    selectBook: (id) =>
+      queue.enqueue(() => {
         const currentProjectId = untrack(() => selectedProject()?.id ?? null);
         if (currentProjectId === null) {
           return Task.fail(new NoActiveProjectError(id));
@@ -233,11 +232,10 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           Task.tap(setWorkspaceSelection),
           Task.asVoid,
         );
-      });
-    },
+      }),
 
-    selectScene(id: string) {
-      return queue.enqueue(() => {
+    selectScene: (id: string) =>
+      queue.enqueue(() => {
         const currentProjectId = untrack(() => selectedProject()?.id ?? null);
         const currentBookId = untrack(() => selectedBook()?.id ?? null);
 
@@ -248,14 +246,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           return Task.fail(new NoActiveProjectError(currentBookId));
         }
 
-        return resolveScene(
-          database,
-          currentProjectId,
-          currentBookId,
-          id,
-        ).pipe(Task.tap(setWorkspaceSelection), Task.asVoid);
-      });
-    },
+        return resolveScene(database, currentProjectId, currentBookId, id).pipe(
+          Task.tap(setWorkspaceSelection),
+          Task.asVoid,
+        );
+      }),
   };
 
   return (
@@ -275,52 +270,46 @@ export function useWorkspace() {
   return ctx;
 }
 
-function resolveProject(db: DbTypes.AppDatabase, projectId: string) {
-  return Task.make(() =>
-    db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
-      Task.gen(function* () {
-        const project = yield* ProjectRepository.get(
-          transaction.projects,
-          projectId,
-        );
-        if (project.deleted_at !== null) {
-          return yield* Task.fail(new ProjectNotFoundError(projectId));
-        }
+const resolveProject = Task.fn((db: DbTypes.AppDatabase, projectId: string) =>
+  db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
+    Task.gen(function* () {
+      const project = yield* ProjectRepository.get(
+        transaction.projects,
+        projectId,
+      );
+      if (project.deleted_at !== null) {
+        return yield* Task.fail(new ProjectNotFoundError(projectId));
+      }
 
-        const book = yield* resolveRememberedBook(transaction.books, project);
-        const scene = book
-          ? yield* resolveRememberedScene(transaction.scenes, book)
-          : null;
-        const resolvedBookId = book?.id ?? null;
-        const resolvedSceneId = scene?.id ?? null;
+      const book = yield* resolveRememberedBook(transaction.books, project);
+      const scene = book
+        ? yield* resolveRememberedScene(transaction.scenes, book)
+        : null;
+      const resolvedBookId = book?.id ?? null;
+      const resolvedSceneId = scene?.id ?? null;
 
-        if (project.last_visited_book_id !== resolvedBookId) {
-          yield* ProjectRepository.update(transaction.projects, project.id, {
-            last_visited_book_id: resolvedBookId,
-          });
-        }
-        if (book && book.last_visited_scene_id !== resolvedSceneId) {
-          yield* BookRepository.update(transaction.books, book.id, {
-            last_visited_scene_id: resolvedSceneId,
-          });
-        }
+      if (project.last_visited_book_id !== resolvedBookId) {
+        yield* ProjectRepository.update(transaction.projects, project.id, {
+          last_visited_book_id: resolvedBookId,
+        });
+      }
+      if (book && book.last_visited_scene_id !== resolvedSceneId) {
+        yield* BookRepository.update(transaction.books, book.id, {
+          last_visited_scene_id: resolvedSceneId,
+        });
+      }
 
-        return {
-          projectId: project.id,
-          bookId: resolvedBookId,
-          sceneId: resolvedSceneId,
-        };
-      }).pipe(Task.runResult),
-    ),
-  );
-}
+      return {
+        projectId: project.id,
+        bookId: resolvedBookId,
+        sceneId: resolvedSceneId,
+      };
+    }).pipe(Task.runResult),
+  ),
+);
 
-function resolveBook(
-  db: DbTypes.AppDatabase,
-  projectId: string,
-  bookId: string,
-) {
-  return Task.make(() =>
+const resolveBook = Task.fn(
+  (db: DbTypes.AppDatabase, projectId: string, bookId: string) =>
     db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
       Task.gen(function* () {
         const [project, book] = yield* Task.all([
@@ -361,16 +350,15 @@ function resolveBook(
         };
       }).pipe(Task.runResult),
     ),
-  );
-}
+);
 
-function resolveScene(
-  db: DbTypes.AppDatabase,
-  projectId: string,
-  bookId: string,
-  sceneId: string,
-) {
-  return Task.make(() =>
+const resolveScene = Task.fn(
+  (
+    db: DbTypes.AppDatabase,
+    projectId: string,
+    bookId: string,
+    sceneId: string,
+  ) =>
     db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
       Task.gen(function* () {
         const [project, book, scene] = yield* Task.all([
@@ -415,8 +403,7 @@ function resolveScene(
         };
       }).pipe(Task.runResult),
     ),
-  );
-}
+);
 
 function resolveRememberedBook(
   booksTable: DbTypes.BooksTable,
