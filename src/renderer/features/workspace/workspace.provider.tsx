@@ -215,13 +215,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
         if (currentProjectId === null) {
           return Result.err(new NoActiveProjectError(id));
         }
-        const resolveBookResult = await resolveBook(
-          database,
-          currentProjectId,
-          id,
+        const resolveBookResult = Result.pipe(
+          await resolveBook(database, currentProjectId, id),
+          Result.tap(setWorkspaceSelection),
         );
         if (Result.isErr(resolveBookResult)) return resolveBookResult;
-        setWorkspaceSelection(resolveBookResult.value);
         return Result.void();
       });
     },
@@ -238,14 +236,11 @@ export const WorkspaceProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
           return Result.err(new NoActiveProjectError(currentBookId));
         }
 
-        const resolveSceneResult = await resolveScene(
-          database,
-          currentProjectId,
-          currentBookId,
-          id,
+        const resolveSceneResult = Result.pipe(
+          await resolveScene(database, currentProjectId, currentBookId, id),
+          Result.tap(setWorkspaceSelection),
         );
         if (Result.isErr(resolveSceneResult)) return resolveSceneResult;
-        setWorkspaceSelection(resolveSceneResult.value);
         return Result.void();
       });
     },
