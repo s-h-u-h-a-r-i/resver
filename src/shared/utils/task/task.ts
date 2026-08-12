@@ -148,6 +148,7 @@ export const Task = {
   flatMap,
   tap,
   tapError,
+  finally: onFinally,
   asVoid,
   all,
   gen,
@@ -262,6 +263,17 @@ function tapError<E>(
       const result = await runResult(self);
       if (!Result.isOk(result)) effect(result.error);
       return result;
+    });
+}
+
+function onFinally(effect: () => void): <A, E>(self: Task<A, E>) => Task<A, E> {
+  return (self) =>
+    make(async () => {
+      try {
+        return await runResult(self);
+      } finally {
+        effect();
+      }
     });
 }
 
