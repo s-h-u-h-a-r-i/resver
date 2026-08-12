@@ -68,6 +68,24 @@ type FnSuccess<Output> = [FnRawSuccess<Output>] extends [undefined]
 
 type FnFailure<Output> = Output extends Err<infer E> ? E : never;
 
+type TaggedError = {
+  readonly _tag: string;
+};
+
+type ErrorTag<E> = E extends TaggedError ? E['_tag'] : never;
+
+type CatchTagsCases<E> = {
+  [Tag in ErrorTag<E>]?: (error: Extract<E, { readonly _tag: Tag }>) => AnyTask;
+};
+
+type CatchTagsSuccess<Cases> = TaskSuccess<
+  ReturnType<Extract<Cases[keyof Cases], (...args: never[]) => AnyTask>>
+>;
+
+type CatchTagsFailure<Cases> = TaskFailure<
+  ReturnType<Extract<Cases[keyof Cases], (...args: never[]) => AnyTask>>
+>;
+
 export interface Task<out A, out E = never> {
   readonly [TaskTypeId]: {
     readonly _A: (_: never) => A;
@@ -146,6 +164,8 @@ export const Task = {
   map,
   mapError,
   flatMap,
+  catchTag,
+  catchTags,
   tap,
   tapError,
   finally: onFinally,
@@ -244,6 +264,87 @@ function flatMap<A, B, F>(
       const result = await runResult(self);
       return Result.isOk(result) ? runResult(transform(result.value)) : result;
     });
+}
+
+function catchTag<
+  E,
+  const Tag extends (E extends TaggedError ? E['_tag'] : never),
+  B,
+  F,
+>(
+  tag: Tag,
+  recover: (error: Extract<E, { readonly _tag: Tag }>) => Task<B, F>,
+): <A>(
+  self: Task<A, E>,
+) => Task<A | B, Exclude<E, { readonly _tag: Tag }> | F> {
+  return <A>(self: Task<A, E>) =>
+    make<A | B, Exclude<E, { readonly _tag: Tag }> | F>(async () => {
+      const result = await runResult(self);
+
+      if (Result.isOk(result)) {
+        return result;
+      }
+
+      if (!isTaggedError(result.error) || result.error._tag !== tag) {
+        return result as Err<Exclude<E, { readonly _tag: Tag }>>;
+      }
+
+      return runResult(
+        recover(result.error as Extract<E, { readonly _tag: Tag }>),
+      );
+    });
+}
+
+function catchTags<
+  E,
+  Cases extends CatchTagsCases<E> & {
+    [Tag in Exclude<keyof Cases, ErrorTag<E>>]: never;
+  },
+>(
+  cases: Cases,
+): <A>(
+  self: Task<A, E>,
+) => Task<
+  A | CatchTagsSuccess<Cases>,
+  Exclude<E, { readonly _tag: keyof Cases }> | CatchTagsFailure<Cases>
+> {
+  return <A>(self: Task<A, E>) =>
+    make<
+      A | CatchTagsSuccess<Cases>,
+      Exclude<E, { readonly _tag: keyof Cases }> | CatchTagsFailure<Cases>
+    >(async () => {
+      const result = await runResult(self);
+
+      if (Result.isOk(result)) {
+        return result;
+      }
+
+      if (!isTaggedError(result.error)) {
+        return result as Err<Exclude<E, { readonly _tag: keyof Cases }>>;
+      }
+
+      const recover = (
+        cases as unknown as Record<string, ((error: E) => AnyTask) | undefined>
+      )[result.error._tag];
+
+      if (!recover) {
+        return result as Err<Exclude<E, { readonly _tag: keyof Cases }>>;
+      }
+
+      return (await runResult(recover(result.error))) as ResultType<
+        CatchTagsSuccess<Cases>,
+        CatchTagsFailure<Cases>
+      >;
+    });
+}
+
+function isTaggedError(value: unknown): value is TaggedError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '_tag' in value &&
+    typeof value._tag === 'string'
+  );
 }
 
 function tap<A>(
