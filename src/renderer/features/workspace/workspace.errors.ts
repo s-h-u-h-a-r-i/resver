@@ -1,4 +1,5 @@
 import { Task } from '@/shared/utils/task';
+import type { DatabaseError } from '@/renderer/core/database';
 import type { BookNotFoundError, BookNotInProjectError } from '../books';
 import type { ProjectNotFoundError } from '../projects';
 import type { SceneNotFoundError, SceneNotInBookError } from '../scenes';
@@ -46,6 +47,7 @@ export type ResolveRememberedSceneError =
 export type SelectProjectError =
   | ProjectNotFoundError
   | BookNotFoundError
+  | DatabaseError
   | ResolveRememberedBookError
   | ResolveRememberedSceneError;
 
@@ -53,6 +55,7 @@ export type SelectBookError =
   | NoActiveProjectError
   | ProjectNotFoundError
   | BookNotFoundError
+  | DatabaseError
   | BookNotInProjectError
   | ResolveRememberedSceneError;
 
@@ -62,5 +65,6 @@ export type SelectSceneError =
   | ProjectNotFoundError
   | BookNotFoundError
   | SceneNotFoundError
+  | DatabaseError
   | BookNotInProjectError
   | SceneNotInBookError;

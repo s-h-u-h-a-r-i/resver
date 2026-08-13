@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 
 import type * as DbTypes from '@/renderer/core/database';
+import { DatabaseError } from '@/renderer/core/database';
 import { Task, TaskArray, TaskQueue } from '@/shared/utils/task';
 import {
   BookNotFoundError,
@@ -235,140 +236,160 @@ export function useWorkspace() {
   return ctx;
 }
 
-const resolveProject = Task.fn((db: DbTypes.AppDatabase, projectId: string) =>
-  db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
-    Task.gen(function* () {
-      const project = yield* ProjectRepository.get(
-        transaction.projects,
-        projectId,
-      );
-      if (project.deleted_at !== null) {
-        return yield* Task.fail(new ProjectNotFoundError(projectId));
-      }
-
-      const book = yield* resolveRememberedBook(transaction.books, project);
-      const scene = book
-        ? yield* resolveRememberedScene(transaction.scenes, book)
-        : null;
-      const resolvedBookId = book?.id ?? null;
-      const resolvedSceneId = scene?.id ?? null;
-
-      if (project.last_visited_book_id !== resolvedBookId) {
-        yield* ProjectRepository.update(transaction.projects, project.id, {
-          last_visited_book_id: resolvedBookId,
-        });
-      }
-      if (book && book.last_visited_scene_id !== resolvedSceneId) {
-        yield* BookRepository.update(transaction.books, book.id, {
-          last_visited_scene_id: resolvedSceneId,
-        });
-      }
-
-      return {
-        projectId: project.id,
-        bookId: resolvedBookId,
-        sceneId: resolvedSceneId,
-      };
-    }).pipe(Task.runResult),
-  ),
-);
-
-const resolveBook = Task.fn(
-  (db: DbTypes.AppDatabase, projectId: string, bookId: string) =>
-    db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
-      Task.gen(function* () {
-        const [project, book] = yield* Task.all([
-          ProjectRepository.get(transaction.projects, projectId),
-          BookRepository.get(transaction.books, bookId),
-        ]);
-
-        if (project.deleted_at !== null) {
-          return yield* Task.fail(new ProjectNotFoundError(projectId));
-        }
-        if (book.deleted_at !== null) {
-          return yield* Task.fail(new BookNotFoundError(bookId));
-        }
-        if (book.project_id !== project.id) {
-          return yield* Task.fail(
-            new BookNotInProjectError(book.id, project.id),
+const resolveProject = Task.fn(function* (
+  db: DbTypes.AppDatabase,
+  projectId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
+        Task.gen(function* () {
+          const project = yield* ProjectRepository.get(
+            transaction.projects,
+            projectId,
           );
-        }
+          if (project.deleted_at !== null) {
+            return yield* Task.fail(new ProjectNotFoundError(projectId));
+          }
 
-        const scene = yield* resolveRememberedScene(transaction.scenes, book);
-        const resolvedSceneId = scene?.id ?? null;
+          const book = yield* resolveRememberedBook(transaction.books, project);
+          const scene = book
+            ? yield* resolveRememberedScene(transaction.scenes, book)
+            : null;
+          const resolvedBookId = book?.id ?? null;
+          const resolvedSceneId = scene?.id ?? null;
 
-        if (project.last_visited_book_id !== book.id) {
-          yield* ProjectRepository.update(transaction.projects, project.id, {
-            last_visited_book_id: book.id,
-          });
-        }
-        if (book.last_visited_scene_id !== resolvedSceneId) {
-          yield* BookRepository.update(transaction.books, book.id, {
-            last_visited_scene_id: resolvedSceneId,
-          });
-        }
+          if (project.last_visited_book_id !== resolvedBookId) {
+            yield* ProjectRepository.update(transaction.projects, project.id, {
+              last_visited_book_id: resolvedBookId,
+            });
+          }
+          if (book && book.last_visited_scene_id !== resolvedSceneId) {
+            yield* BookRepository.update(transaction.books, book.id, {
+              last_visited_scene_id: resolvedSceneId,
+            });
+          }
 
-        return {
-          projectId: project.id,
-          bookId: book.id,
-          sceneId: resolvedSceneId,
-        };
-      }).pipe(Task.runResult),
-    ),
-);
+          return {
+            projectId: project.id,
+            bookId: resolvedBookId,
+            sceneId: resolvedSceneId,
+          };
+        }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
-const resolveScene = Task.fn(
-  (
-    db: DbTypes.AppDatabase,
-    projectId: string,
-    bookId: string,
-    sceneId: string,
-  ) =>
-    db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
-      Task.gen(function* () {
-        const [project, book, scene] = yield* Task.all([
-          ProjectRepository.get(transaction.projects, projectId),
-          BookRepository.get(transaction.books, bookId),
-          SceneRepository.get(transaction.scenes, sceneId),
-        ]);
+const resolveBook = Task.fn(function* (
+  db: DbTypes.AppDatabase,
+  projectId: string,
+  bookId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
+        Task.gen(function* () {
+          const [project, book] = yield* Task.all([
+            ProjectRepository.get(transaction.projects, projectId),
+            BookRepository.get(transaction.books, bookId),
+          ]);
 
-        if (project.deleted_at !== null) {
-          return yield* Task.fail(new ProjectNotFoundError(projectId));
-        }
-        if (book.deleted_at !== null) {
-          return yield* Task.fail(new BookNotFoundError(bookId));
-        }
-        if (scene.deleted_at !== null) {
-          return yield* Task.fail(new SceneNotFoundError(sceneId));
-        }
-        if (book.project_id !== project.id) {
-          return yield* Task.fail(
-            new BookNotInProjectError(book.id, project.id),
-          );
-        }
-        if (scene.book_id !== book.id) {
-          return yield* Task.fail(new SceneNotInBookError(scene.id, book.id));
-        }
+          if (project.deleted_at !== null) {
+            return yield* Task.fail(new ProjectNotFoundError(projectId));
+          }
+          if (book.deleted_at !== null) {
+            return yield* Task.fail(new BookNotFoundError(bookId));
+          }
+          if (book.project_id !== project.id) {
+            return yield* Task.fail(
+              new BookNotInProjectError(book.id, project.id),
+            );
+          }
 
-        if (project.last_visited_book_id !== book.id) {
-          yield* ProjectRepository.update(transaction.projects, project.id, {
-            last_visited_book_id: book.id,
-          });
-        }
-        if (book.last_visited_scene_id !== scene.id) {
-          yield* BookRepository.update(transaction.books, book.id, {
-            last_visited_scene_id: scene.id,
-          });
-        }
+          const scene = yield* resolveRememberedScene(transaction.scenes, book);
+          const resolvedSceneId = scene?.id ?? null;
 
-        return {
-          projectId: project.id,
-          bookId: book.id,
-          sceneId: scene.id,
-        };
-      }).pipe(Task.runResult),
-    ),
-);
+          if (project.last_visited_book_id !== book.id) {
+            yield* ProjectRepository.update(transaction.projects, project.id, {
+              last_visited_book_id: book.id,
+            });
+          }
+          if (book.last_visited_scene_id !== resolvedSceneId) {
+            yield* BookRepository.update(transaction.books, book.id, {
+              last_visited_scene_id: resolvedSceneId,
+            });
+          }
+
+          return {
+            projectId: project.id,
+            bookId: book.id,
+            sceneId: resolvedSceneId,
+          };
+        }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const resolveScene = Task.fn(function* (
+  db: DbTypes.AppDatabase,
+  projectId: string,
+  bookId: string,
+  sceneId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
+        Task.gen(function* () {
+          const [project, book, scene] = yield* Task.all([
+            ProjectRepository.get(transaction.projects, projectId),
+            BookRepository.get(transaction.books, bookId),
+            SceneRepository.get(transaction.scenes, sceneId),
+          ]);
+
+          if (project.deleted_at !== null) {
+            return yield* Task.fail(new ProjectNotFoundError(projectId));
+          }
+          if (book.deleted_at !== null) {
+            return yield* Task.fail(new BookNotFoundError(bookId));
+          }
+          if (scene.deleted_at !== null) {
+            return yield* Task.fail(new SceneNotFoundError(sceneId));
+          }
+          if (book.project_id !== project.id) {
+            return yield* Task.fail(
+              new BookNotInProjectError(book.id, project.id),
+            );
+          }
+          if (scene.book_id !== book.id) {
+            return yield* Task.fail(new SceneNotInBookError(scene.id, book.id));
+          }
+
+          if (project.last_visited_book_id !== book.id) {
+            yield* ProjectRepository.update(transaction.projects, project.id, {
+              last_visited_book_id: book.id,
+            });
+          }
+          if (book.last_visited_scene_id !== scene.id) {
+            yield* BookRepository.update(transaction.books, book.id, {
+              last_visited_scene_id: scene.id,
+            });
+          }
+
+          return {
+            projectId: project.id,
+            bookId: book.id,
+            sceneId: scene.id,
+          };
+        }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
 function resolveRememberedBook(
   booksTable: DbTypes.BooksTable,

@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 
 import type * as DbTypes from '@/renderer/core/database';
-import { createLiveQuery } from '@/renderer/core/database';
+import { createLiveQuery, DatabaseError } from '@/renderer/core/database';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { Task, TaskArray } from '@/shared/utils/task';
@@ -22,7 +22,8 @@ type CreateSceneInput = Pick<DbTypes.LocalSceneCamel, 'title' | 'bookId'>;
 type UpdateSceneInput = Partial<
   Pick<DbTypes.LocalSceneCamel, 'status' | 'title' | 'wordCount'>
 >;
-type CreateSceneError = BookNotFoundError | ProjectNotFoundError;
+type CreateSceneError =
+  BookNotFoundError | ProjectNotFoundError | DbTypes.DatabaseError;
 type UpdateSceneError = CreateSceneError | SceneNotFoundError;
 type MoveSceneError = UpdateSceneError | InvalidSceneMoveError;
 
@@ -49,9 +50,10 @@ export const ScenesProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const database = untrack(() => props.db);
   const scenes = createLiveQuery(() =>
-    SceneRepository.list(database.scenes).pipe(
-      TaskArray.sortByString('position'),
-      Task.run,
+    Task.runOrThrow(
+      SceneRepository.list(database.scenes).pipe(
+        TaskArray.sortByString('position'),
+      ),
     ),
   );
 
@@ -84,158 +86,185 @@ export function useScenes() {
   return ctx;
 }
 
-const createScene = Task.fn(
-  (database: DbTypes.AppDatabase, input: CreateSceneInput) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveBook(
-            transaction.projects,
-            transaction.books,
-            input.bookId,
-          );
+const createScene = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  input: CreateSceneInput,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveBook(
+              transaction.projects,
+              transaction.books,
+              input.bookId,
+            );
 
-          const bookScenes = yield* SceneRepository.listByBook(
-            transaction.scenes,
-            input.bookId,
-          ).pipe(TaskArray.sortByString('position'));
-          const position = generateKeyBetween(
-            bookScenes[bookScenes.length - 1]?.position,
-            undefined,
-          );
-          const now = new Date().toISOString();
-          const id = crypto.randomUUID();
+            const bookScenes = yield* SceneRepository.listByBook(
+              transaction.scenes,
+              input.bookId,
+            ).pipe(TaskArray.sortByString('position'));
+            const position = generateKeyBetween(
+              bookScenes[bookScenes.length - 1]?.position,
+              undefined,
+            );
+            const now = new Date().toISOString();
+            const id = crypto.randomUUID();
 
-          yield* SceneRepository.add(transaction.scenes, {
-            id,
-            book_id: input.bookId,
-            title: input.title,
-            position,
-            status: 'draft',
-            word_count: 0,
-            deleted_at: null,
-            created_at: now,
-            updated_at: now,
-          });
-
-          return id;
-        }).pipe(Task.runResult),
-    ),
-);
-
-const updateScene = Task.fn(
-  (database: DbTypes.AppDatabase, sceneId: string, input: UpdateSceneInput) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveScene(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            sceneId,
-          );
-
-          yield* SceneRepository.update(
-            transaction.scenes,
-            sceneId,
-            omitUndefined<DbTypes.SceneUpdate>({
-              status: input.status,
+            yield* SceneRepository.add(transaction.scenes, {
+              id,
+              book_id: input.bookId,
               title: input.title,
-              word_count: input.wordCount,
+              position,
+              status: 'draft',
+              word_count: 0,
+              deleted_at: null,
+              created_at: now,
+              updated_at: now,
+            });
+
+            return id;
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const updateScene = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  input: UpdateSceneInput,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveScene(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              sceneId,
+            );
+
+            yield* SceneRepository.update(
+              transaction.scenes,
+              sceneId,
+              omitUndefined<DbTypes.SceneUpdate>({
+                status: input.status,
+                title: input.title,
+                word_count: input.wordCount,
+                updated_at: new Date().toISOString(),
+              }),
+            );
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const moveScene = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  prevSceneId: string | undefined,
+  nextSceneId: string | undefined,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        (transaction) =>
+          Task.gen(function* () {
+            const { scene } = yield* requireActiveScene(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              sceneId,
+            );
+
+            const siblings = (yield* SceneRepository.listByBook(
+              transaction.scenes,
+              scene.book_id,
+            ).pipe(TaskArray.sortByString('position'))).filter(
+              (sibling) => sibling.id !== sceneId,
+            );
+
+            const prevIndex =
+              prevSceneId === undefined
+                ? -1
+                : siblings.findIndex((sibling) => sibling.id === prevSceneId);
+            const nextIndex =
+              nextSceneId === undefined
+                ? siblings.length
+                : siblings.findIndex((sibling) => sibling.id === nextSceneId);
+
+            if (
+              (prevSceneId !== undefined && prevIndex === -1) ||
+              (nextSceneId !== undefined && nextIndex === -1) ||
+              nextIndex !== prevIndex + 1
+            ) {
+              return yield* Task.fail(new InvalidSceneMoveError(sceneId));
+            }
+
+            yield* SceneRepository.update(transaction.scenes, sceneId, {
+              position: generateKeyBetween(
+                siblings[prevIndex]?.position,
+                siblings[nextIndex]?.position,
+              ),
               updated_at: new Date().toISOString(),
-            }),
-          );
-        }).pipe(Task.runResult),
-    ),
-);
+            });
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
-const moveScene = Task.fn(
-  (
-    database: DbTypes.AppDatabase,
-    sceneId: string,
-    prevSceneId: string | undefined,
-    nextSceneId: string | undefined,
-  ) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      (transaction) =>
-        Task.gen(function* () {
-          const { scene } = yield* requireActiveScene(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            sceneId,
-          );
+const deleteScene = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveScene(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              sceneId,
+            );
 
-          const siblings = (yield* SceneRepository.listByBook(
-            transaction.scenes,
-            scene.book_id,
-          ).pipe(TaskArray.sortByString('position'))).filter(
-            (sibling) => sibling.id !== sceneId,
-          );
-
-          const prevIndex =
-            prevSceneId === undefined
-              ? -1
-              : siblings.findIndex((sibling) => sibling.id === prevSceneId);
-          const nextIndex =
-            nextSceneId === undefined
-              ? siblings.length
-              : siblings.findIndex((sibling) => sibling.id === nextSceneId);
-
-          if (
-            (prevSceneId !== undefined && prevIndex === -1) ||
-            (nextSceneId !== undefined && nextIndex === -1) ||
-            nextIndex !== prevIndex + 1
-          ) {
-            return yield* Task.fail(new InvalidSceneMoveError(sceneId));
-          }
-
-          yield* SceneRepository.update(transaction.scenes, sceneId, {
-            position: generateKeyBetween(
-              siblings[prevIndex]?.position,
-              siblings[nextIndex]?.position,
-            ),
-            updated_at: new Date().toISOString(),
-          });
-        }).pipe(Task.runResult),
-    ),
-);
-
-const deleteScene = Task.fn((database: DbTypes.AppDatabase, sceneId: string) =>
-  database.transaction(
-    'rw',
-    database.projects,
-    database.books,
-    database.scenes,
-    (transaction) =>
-      Task.gen(function* () {
-        yield* requireActiveScene(
-          transaction.projects,
-          transaction.books,
-          transaction.scenes,
-          sceneId,
-        );
-
-        const now = new Date().toISOString();
-        yield* SceneRepository.update(transaction.scenes, sceneId, {
-          deleted_at: now,
-          updated_at: now,
-        });
-      }).pipe(Task.runResult),
-  ),
-);
+            const now = new Date().toISOString();
+            yield* SceneRepository.update(transaction.scenes, sceneId, {
+              deleted_at: now,
+              updated_at: now,
+            });
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
 const requireActiveBook = (
   projects: DbTypes.ProjectsTable,

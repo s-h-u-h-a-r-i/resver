@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 
 import type * as DbTypes from '@/renderer/core/database';
-import { createLiveQuery } from '@/renderer/core/database';
+import { createLiveQuery, DatabaseError } from '@/renderer/core/database';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { Task, TaskArray } from '@/shared/utils/task';
 import { PageLoading } from '../../components/ui/page-loading';
@@ -26,12 +26,14 @@ type UpdateProjectInput = Partial<
 interface ProjectsContextValue {
   projects: Accessor<DbTypes.LocalProject[]>;
 
-  createProject(input: CreateProjectInput): Task<string>;
+  createProject(input: CreateProjectInput): Task<string, DbTypes.DatabaseError>;
   updateProject(
     id: string,
     input: UpdateProjectInput,
-  ): Task<void, ProjectNotFoundError>;
-  deleteProject(id: string): Task<void, ProjectNotFoundError>;
+  ): Task<void, ProjectNotFoundError | DbTypes.DatabaseError>;
+  deleteProject(
+    id: string,
+  ): Task<void, ProjectNotFoundError | DbTypes.DatabaseError>;
 }
 
 const ProjectsContext = createContext<ProjectsContextValue>();
@@ -41,9 +43,10 @@ export const ProjectsProvider: ParentComponent<{ db: DbTypes.AppDatabase }> = (
 ) => {
   const database = untrack(() => props.db);
   const projects = createLiveQuery(() =>
-    ProjectRepository.list(database.projects).pipe(
-      TaskArray.sortByString('created_at'),
-      Task.run,
+    Task.runOrThrow(
+      ProjectRepository.list(database.projects).pipe(
+        TaskArray.sortByString('created_at'),
+      ),
     ),
   );
 
@@ -80,7 +83,7 @@ export function useProjects() {
 const createProject = (
   database: DbTypes.AppDatabase,
   input: CreateProjectInput,
-): Task<string> => {
+): Task<string, DbTypes.DatabaseError> => {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
 
@@ -95,43 +98,54 @@ const createProject = (
   }).pipe(Task.map(() => id));
 };
 
-const updateProject = Task.fn(
-  (
-    database: DbTypes.AppDatabase,
-    projectId: string,
-    input: UpdateProjectInput,
-  ) =>
-    database.transaction('rw', database.projects, (transaction) =>
-      Task.gen(function* () {
-        yield* requireActiveProject(transaction.projects, projectId);
+const updateProject = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  projectId: string,
+  input: UpdateProjectInput,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction('rw', database.projects, (transaction) =>
+        Task.gen(function* () {
+          yield* requireActiveProject(transaction.projects, projectId);
 
-        yield* ProjectRepository.update(
-          transaction.projects,
-          projectId,
-          omitUndefined<DbTypes.ProjectUpdate>({
-            title: input.title,
-            description: input.description,
-            updated_at: new Date().toISOString(),
-          }),
-        );
-      }).pipe(Task.runResult),
-    ),
-);
+          yield* ProjectRepository.update(
+            transaction.projects,
+            projectId,
+            omitUndefined<DbTypes.ProjectUpdate>({
+              title: input.title,
+              description: input.description,
+              updated_at: new Date().toISOString(),
+            }),
+          );
+        }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
-const deleteProject = Task.fn(
-  (database: DbTypes.AppDatabase, projectId: string) =>
-    database.transaction('rw', database.projects, (transaction) =>
-      Task.gen(function* () {
-        yield* requireActiveProject(transaction.projects, projectId);
+const deleteProject = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  projectId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction('rw', database.projects, (transaction) =>
+        Task.gen(function* () {
+          yield* requireActiveProject(transaction.projects, projectId);
 
-        const now = new Date().toISOString();
-        yield* ProjectRepository.update(transaction.projects, projectId, {
-          deleted_at: now,
-          updated_at: now,
-        });
-      }).pipe(Task.runResult),
-    ),
-);
+          const now = new Date().toISOString();
+          yield* ProjectRepository.update(transaction.projects, projectId, {
+            deleted_at: now,
+            updated_at: now,
+          });
+        }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
 const requireActiveProject = (
   projects: DbTypes.ProjectsTable,

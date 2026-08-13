@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 
 import type * as DbTypes from '@/renderer/core/database';
-import { createLiveQuery } from '@/renderer/core/database';
+import { DatabaseError, createLiveQuery } from '@/renderer/core/database';
 import { generateKeyBetween } from '@/shared/utils/fractional-indexing';
 import { omitUndefined } from '@/shared/utils/omit-undefined';
 import { Task, TaskArray } from '@/shared/utils/task';
@@ -29,7 +29,10 @@ export type UpdateParagraphInput = Partial<
 >;
 
 export type CreateParagraphError =
-  ProjectNotFoundError | BookNotFoundError | SceneNotFoundError;
+  | ProjectNotFoundError
+  | BookNotFoundError
+  | SceneNotFoundError
+  | DbTypes.DatabaseError;
 
 export type UpdateParagraphError =
   CreateParagraphError | ParagraphNotFoundError | ParagraphNotInSceneError;
@@ -71,17 +74,22 @@ export const ParagraphsProvider: ParentComponent<{
 
   const paragraphQuery = createLiveQuery<
     string,
-    {
-      sceneId: string | undefined;
-      paragraphs: DbTypes.LocalParagraph[] | undefined;
-    }
+    | {
+        sceneId: string;
+        paragraphs: DbTypes.LocalParagraph[];
+      }
+    | {
+        sceneId: undefined;
+        paragraphs: undefined;
+      }
   >(
     async (sceneId) => ({
       sceneId,
-      paragraphs: await ParagraphRepository.listByScene(
-        database.paragraphs,
-        sceneId,
-      ).pipe(TaskArray.sortByString('position'), Task.run),
+      paragraphs: await Task.runOrThrow(
+        ParagraphRepository.listByScene(database.paragraphs, sceneId).pipe(
+          TaskArray.sortByString('position'),
+        ),
+      ),
     }),
     {
       dep: () => props.sceneId,
@@ -139,187 +147,209 @@ export function useParagraphs() {
   return context;
 }
 
-const createParagraph = Task.fn(
-  (
-    database: DbTypes.AppDatabase,
-    sceneId: string,
-    input: CreateParagraphInput,
-  ) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      database.paragraphs,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveScene(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            sceneId,
-          );
+const createParagraph = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  input: CreateParagraphInput,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        database.paragraphs,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveScene(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              sceneId,
+            );
 
-          const sceneParagraphs = yield* ParagraphRepository.listByScene(
-            transaction.paragraphs,
-            sceneId,
-          ).pipe(TaskArray.sortByString('position'));
-          const now = new Date().toISOString();
-          const id = crypto.randomUUID();
+            const sceneParagraphs = yield* ParagraphRepository.listByScene(
+              transaction.paragraphs,
+              sceneId,
+            ).pipe(TaskArray.sortByString('position'));
+            const now = new Date().toISOString();
+            const id = crypto.randomUUID();
 
-          yield* ParagraphRepository.add(transaction.paragraphs, {
-            id,
-            scene_id: sceneId,
-            content: input.content,
-            position: generateKeyBetween(
-              sceneParagraphs[sceneParagraphs.length - 1]?.position,
-              undefined,
-            ),
-            deleted_at: null,
-            created_at: now,
-            updated_at: now,
-          });
-
-          return id;
-        }).pipe(Task.runResult),
-    ),
-);
-
-const updateParagraph = Task.fn(
-  (
-    database: DbTypes.AppDatabase,
-    sceneId: string,
-    paragraphId: string,
-    input: UpdateParagraphInput,
-  ) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      database.paragraphs,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveParagraph(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            transaction.paragraphs,
-            sceneId,
-            paragraphId,
-          );
-
-          yield* ParagraphRepository.update(
-            transaction.paragraphs,
-            paragraphId,
-            omitUndefined<DbTypes.ParagraphUpdate>({
+            yield* ParagraphRepository.add(transaction.paragraphs, {
+              id,
+              scene_id: sceneId,
               content: input.content,
-              updated_at: new Date().toISOString(),
-            }),
-          );
-        }).pipe(Task.runResult),
-    ),
-);
-
-const moveParagraph = Task.fn(
-  (
-    database: DbTypes.AppDatabase,
-    sceneId: string,
-    paragraphId: string,
-    previousParagraphId: string | undefined,
-    nextParagraphId: string | undefined,
-  ) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      database.paragraphs,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveParagraph(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            transaction.paragraphs,
-            sceneId,
-            paragraphId,
-          );
-
-          const siblings = (yield* ParagraphRepository.listByScene(
-            transaction.paragraphs,
-            sceneId,
-          ).pipe(TaskArray.sortByString('position'))).filter(
-            (paragraph) => paragraph.id !== paragraphId,
-          );
-
-          const previousIndex =
-            previousParagraphId === undefined
-              ? -1
-              : siblings.findIndex(
-                  (paragraph) => paragraph.id === previousParagraphId,
-                );
-          const nextIndex =
-            nextParagraphId === undefined
-              ? siblings.length
-              : siblings.findIndex(
-                  (paragraph) => paragraph.id === nextParagraphId,
-                );
-
-          if (
-            (previousParagraphId !== undefined && previousIndex === -1) ||
-            (nextParagraphId !== undefined && nextIndex === -1) ||
-            nextIndex !== previousIndex + 1
-          ) {
-            return yield* Task.fail(new InvalidParagraphMoveError(paragraphId));
-          }
-
-          yield* ParagraphRepository.update(
-            transaction.paragraphs,
-            paragraphId,
-            {
               position: generateKeyBetween(
-                siblings[previousIndex]?.position,
-                siblings[nextIndex]?.position,
+                sceneParagraphs[sceneParagraphs.length - 1]?.position,
+                undefined,
               ),
-              updated_at: new Date().toISOString(),
-            },
-          );
-        }).pipe(Task.runResult),
-    ),
-);
-
-const deleteParagraph = Task.fn(
-  (database: DbTypes.AppDatabase, sceneId: string, paragraphId: string) =>
-    database.transaction(
-      'rw',
-      database.projects,
-      database.books,
-      database.scenes,
-      database.paragraphs,
-      (transaction) =>
-        Task.gen(function* () {
-          yield* requireActiveParagraph(
-            transaction.projects,
-            transaction.books,
-            transaction.scenes,
-            transaction.paragraphs,
-            sceneId,
-            paragraphId,
-          );
-
-          const now = new Date().toISOString();
-          yield* ParagraphRepository.update(
-            transaction.paragraphs,
-            paragraphId,
-            {
-              deleted_at: now,
+              deleted_at: null,
+              created_at: now,
               updated_at: now,
-            },
-          );
-        }).pipe(Task.runResult),
-    ),
-);
+            });
+
+            return id;
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const updateParagraph = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  paragraphId: string,
+  input: UpdateParagraphInput,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        database.paragraphs,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveParagraph(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              transaction.paragraphs,
+              sceneId,
+              paragraphId,
+            );
+
+            yield* ParagraphRepository.update(
+              transaction.paragraphs,
+              paragraphId,
+              omitUndefined<DbTypes.ParagraphUpdate>({
+                content: input.content,
+                updated_at: new Date().toISOString(),
+              }),
+            );
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const moveParagraph = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  paragraphId: string,
+  previousParagraphId: string | undefined,
+  nextParagraphId: string | undefined,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        database.paragraphs,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveParagraph(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              transaction.paragraphs,
+              sceneId,
+              paragraphId,
+            );
+
+            const siblings = (yield* ParagraphRepository.listByScene(
+              transaction.paragraphs,
+              sceneId,
+            ).pipe(TaskArray.sortByString('position'))).filter(
+              (paragraph) => paragraph.id !== paragraphId,
+            );
+
+            const previousIndex =
+              previousParagraphId === undefined
+                ? -1
+                : siblings.findIndex(
+                    (paragraph) => paragraph.id === previousParagraphId,
+                  );
+            const nextIndex =
+              nextParagraphId === undefined
+                ? siblings.length
+                : siblings.findIndex(
+                    (paragraph) => paragraph.id === nextParagraphId,
+                  );
+
+            if (
+              (previousParagraphId !== undefined && previousIndex === -1) ||
+              (nextParagraphId !== undefined && nextIndex === -1) ||
+              nextIndex !== previousIndex + 1
+            ) {
+              return yield* Task.fail(
+                new InvalidParagraphMoveError(paragraphId),
+              );
+            }
+
+            yield* ParagraphRepository.update(
+              transaction.paragraphs,
+              paragraphId,
+              {
+                position: generateKeyBetween(
+                  siblings[previousIndex]?.position,
+                  siblings[nextIndex]?.position,
+                ),
+                updated_at: new Date().toISOString(),
+              },
+            );
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
+
+const deleteParagraph = Task.fn(function* (
+  database: DbTypes.AppDatabase,
+  sceneId: string,
+  paragraphId: string,
+) {
+  const result = yield* Task.tryPromise(
+    () =>
+      database.transaction(
+        'rw',
+        database.projects,
+        database.books,
+        database.scenes,
+        database.paragraphs,
+        (transaction) =>
+          Task.gen(function* () {
+            yield* requireActiveParagraph(
+              transaction.projects,
+              transaction.books,
+              transaction.scenes,
+              transaction.paragraphs,
+              sceneId,
+              paragraphId,
+            );
+
+            const now = new Date().toISOString();
+            yield* ParagraphRepository.update(
+              transaction.paragraphs,
+              paragraphId,
+              {
+                deleted_at: now,
+                updated_at: now,
+              },
+            );
+          }).pipe(Task.runResult),
+      ),
+    DatabaseError.from,
+  );
+  return yield* Task.fromResult(result);
+});
 
 const requireActiveScene = (
   projects: DbTypes.ProjectsTable,
