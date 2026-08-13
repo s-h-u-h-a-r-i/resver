@@ -59,15 +59,6 @@ type TaskSuccesses<Tasks extends readonly AnyTask[]> = {
   -readonly [Index in keyof Tasks]: TaskSuccess<Tasks[Index]>;
 };
 
-type FnRawSuccess<Output> =
-  Output extends Ok<infer A> ? A : Output extends Err<unknown> ? never : Output;
-
-type FnSuccess<Output> = [FnRawSuccess<Output>] extends [undefined]
-  ? void
-  : FnRawSuccess<Output>;
-
-type FnFailure<Output> = Output extends Err<infer E> ? E : never;
-
 type TaggedError = {
   readonly _tag: string;
 };
@@ -158,6 +149,7 @@ export const Task = {
   make,
   fn,
   succeed,
+  void: voidTask,
   fail,
   fromResult,
   tryPromise,
@@ -166,6 +158,7 @@ export const Task = {
   flatMap,
   catchTag,
   catchTags,
+  catchAll,
   tap,
   tapError,
   finally: onFinally,
@@ -194,25 +187,18 @@ function make<A, E = never>(
   return new TaskImpl(execute);
 }
 
-function fn<Args extends readonly unknown[], Output>(
-  execute: (...args: Args) => Promise<Output>,
-): (...args: Args) => Task<FnSuccess<Output>, FnFailure<Output>> {
-  return (...args) =>
-    make<FnSuccess<Output>, FnFailure<Output>>(async () => {
-      const output = (await execute(...args)) as Output;
-
-      return isResult(output)
-        ? (output as ResultType<FnSuccess<Output>, FnFailure<Output>>)
-        : Result.ok(output as FnSuccess<Output>);
-    });
-}
-
-function isResult(value: unknown): value is AnyResult {
-  return typeof value === 'object' && value !== null && ResultTypeId in value;
+function fn<Args extends readonly unknown[], Yielded extends AnyTask, A>(
+  body: (...args: Args) => Generator<Yielded, A, unknown>,
+): (...args: Args) => Task<A, TaskFailure<Yielded>> {
+  return (...args) => gen(() => body(...args));
 }
 
 function succeed<A>(value: A): Task<A> {
   return make(async () => Result.ok(value));
+}
+
+function voidTask(): Task<void> {
+  return succeed(undefined);
 }
 
 function fail<E>(error: E): Task<never, E> {
@@ -335,6 +321,16 @@ function catchTags<
         CatchTagsSuccess<Cases>,
         CatchTagsFailure<Cases>
       >;
+    });
+}
+
+function catchAll<E, B, F>(
+  recover: (error: E) => Task<B, F>,
+): <A>(self: Task<A, E>) => Task<A | B, F> {
+  return <A>(self: Task<A, E>) =>
+    make<A | B, F>(async () => {
+      const result = await runResult(self);
+      return Result.isOk(result) ? result : runResult(recover(result.error));
     });
 }
 
