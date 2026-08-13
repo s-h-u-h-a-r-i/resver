@@ -156,6 +156,7 @@ export const Task = {
   map,
   mapError,
   flatMap,
+  filterOrElse,
   catchTag,
   catchTags,
   catchAll,
@@ -250,6 +251,23 @@ function flatMap<A, B, F>(
       const result = await runResult(self);
       return Result.isOk(result) ? runResult(transform(result.value)) : result;
     });
+}
+
+function filterOrElse<A, B extends A, C, F>(
+  refinement: (value: A) => value is B,
+  orElse: (value: Exclude<A, B>) => Task<C, F>,
+): <E>(self: Task<A, E>) => Task<B | C, E | F>;
+function filterOrElse<A, C, F>(
+  predicate: (value: A) => boolean,
+  orElse: (value: A) => Task<C, F>,
+): <E>(self: Task<A, E>) => Task<A | C, E | F>;
+function filterOrElse(
+  predicate: (value: never) => boolean,
+  orElse: (value: never) => AnyTask,
+): (self: AnyTask) => AnyTask {
+  return flatMap((value: unknown) =>
+    predicate(value as never) ? succeed(value) : orElse(value as never),
+  );
 }
 
 function catchTag<
