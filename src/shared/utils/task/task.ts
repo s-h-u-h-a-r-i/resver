@@ -16,6 +16,11 @@ export type ResultType<A, E = never> = Ok<A> | Err<E>;
 
 type AnyResult = ResultType<unknown, unknown>;
 
+type EqualsWith<A, B, Equal, Different> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? Equal
+    : Different;
+
 export const Result = {
   void: voidResult,
   ok,
@@ -253,13 +258,15 @@ function flatMap<A, B, F>(
     });
 }
 
-function filterOrElse<A, B extends A, C, F>(
-  refinement: (value: A) => value is B,
-  orElse: (value: Exclude<A, B>) => Task<C, F>,
+function filterOrElse<A, C, F, B extends A>(
+  refinement: (value: NoInfer<A>) => value is B,
+  orElse: (
+    value: EqualsWith<A, B, NoInfer<A>, Exclude<NoInfer<A>, B>>,
+  ) => Task<C, F>,
 ): <E>(self: Task<A, E>) => Task<B | C, E | F>;
 function filterOrElse<A, C, F>(
-  predicate: (value: A) => boolean,
-  orElse: (value: A) => Task<C, F>,
+  predicate: (value: NoInfer<A>) => boolean,
+  orElse: (value: NoInfer<A>) => Task<C, F>,
 ): <E>(self: Task<A, E>) => Task<A | C, E | F>;
 function filterOrElse(
   predicate: (value: never) => boolean,
