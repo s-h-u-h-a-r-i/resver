@@ -32,8 +32,6 @@ import {
   useScenes,
 } from '../scenes';
 import {
-  MissingBookReferenceError,
-  MissingSceneReferenceError,
   NoActiveBookError,
   NoActiveProjectError,
   type SelectBookError,
@@ -292,21 +290,24 @@ const resolveBook = Task.fn(function* (
       db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
         Task.gen(function* () {
           const [project, book] = yield* Task.all([
-            ProjectRepository.get(transaction.projects, projectId),
-            BookRepository.get(transaction.books, bookId),
+            ProjectRepository.get(transaction.projects, projectId).pipe(
+              Task.filterOrElse(
+                (project) => project.deleted_at === null,
+                (project) => Task.fail(new ProjectNotFoundError(project.id)),
+              ),
+            ),
+            BookRepository.get(transaction.books, bookId).pipe(
+              Task.filterOrElse(
+                (book) => book.deleted_at === null,
+                () => Task.fail(new BookNotFoundError(bookId)),
+              ),
+              Task.filterOrElse(
+                (book) => book.project_id === projectId,
+                (book) =>
+                  Task.fail(new BookNotInProjectError(book.id, projectId)),
+              ),
+            ),
           ]);
-
-          if (project.deleted_at !== null) {
-            return yield* Task.fail(new ProjectNotFoundError(projectId));
-          }
-          if (book.deleted_at !== null) {
-            return yield* Task.fail(new BookNotFoundError(bookId));
-          }
-          if (book.project_id !== project.id) {
-            return yield* Task.fail(
-              new BookNotInProjectError(book.id, project.id),
-            );
-          }
 
           const scene = yield* resolveRememberedScene(transaction.scenes, book);
           const resolvedSceneId = scene?.id ?? null;
@@ -345,28 +346,34 @@ const resolveScene = Task.fn(function* (
       db.transaction('rw', db.projects, db.books, db.scenes, (transaction) =>
         Task.gen(function* () {
           const [project, book, scene] = yield* Task.all([
-            ProjectRepository.get(transaction.projects, projectId),
-            BookRepository.get(transaction.books, bookId),
-            SceneRepository.get(transaction.scenes, sceneId),
+            ProjectRepository.get(transaction.projects, projectId).pipe(
+              Task.filterOrElse(
+                (project) => project.deleted_at === null,
+                (project) => Task.fail(new ProjectNotFoundError(project.id)),
+              ),
+            ),
+            BookRepository.get(transaction.books, bookId).pipe(
+              Task.filterOrElse(
+                (book) => book.deleted_at === null,
+                (book) => Task.fail(new BookNotFoundError(book.id)),
+              ),
+              Task.filterOrElse(
+                (book) => book.project_id === projectId,
+                (book) =>
+                  Task.fail(new BookNotInProjectError(book.id, projectId)),
+              ),
+            ),
+            SceneRepository.get(transaction.scenes, sceneId).pipe(
+              Task.filterOrElse(
+                (scene) => scene.deleted_at === null,
+                (scene) => Task.fail(new SceneNotFoundError(scene.id)),
+              ),
+              Task.filterOrElse(
+                (scene) => scene.book_id === bookId,
+                (scene) => Task.fail(new SceneNotInBookError(scene.id, bookId)),
+              ),
+            ),
           ]);
-
-          if (project.deleted_at !== null) {
-            return yield* Task.fail(new ProjectNotFoundError(projectId));
-          }
-          if (book.deleted_at !== null) {
-            return yield* Task.fail(new BookNotFoundError(bookId));
-          }
-          if (scene.deleted_at !== null) {
-            return yield* Task.fail(new SceneNotFoundError(sceneId));
-          }
-          if (book.project_id !== project.id) {
-            return yield* Task.fail(
-              new BookNotInProjectError(book.id, project.id),
-            );
-          }
-          if (scene.book_id !== book.id) {
-            return yield* Task.fail(new SceneNotInBookError(scene.id, book.id));
-          }
 
           if (project.last_visited_book_id !== book.id) {
             yield* ProjectRepository.update(transaction.projects, project.id, {
@@ -391,79 +398,57 @@ const resolveScene = Task.fn(function* (
   return yield* Task.fromResult(result);
 });
 
-function resolveRememberedBook(
+const resolveRememberedBook = Task.fn(function* (
   booksTable: DbTypes.BooksTable,
   project: DbTypes.LocalProject,
 ) {
   const rememberedId = project.last_visited_book_id;
   if (rememberedId) {
-    return Task.gen(function* () {
-      const rememberedBook = yield* BookRepository.get(
-        booksTable,
-        rememberedId,
-      ).pipe(
-        Task.mapError(
-          () => new MissingBookReferenceError(project.id, rememberedId),
-        ),
-      );
+    const bookIsActiveAndInProject = (book: DbTypes.LocalBook) =>
+      book.deleted_at === null && book.project_id === project.id;
 
-      if (rememberedBook.deleted_at !== null) {
-        return yield* Task.fail(
-          new MissingBookReferenceError(project.id, rememberedId),
-        );
-      }
-      if (rememberedBook.project_id !== project.id) {
-        return yield* Task.fail(
-          new BookNotInProjectError(rememberedBook.id, project.id),
-        );
-      }
+    const rememberedBook = yield* BookRepository.get(
+      booksTable,
+      rememberedId,
+    ).pipe(
+      Task.filterOrElse(bookIsActiveAndInProject, () => Task.succeed(null)),
+      Task.catchTag('bookNotFound', () => Task.succeed(null)),
+    );
 
-      return rememberedBook;
-    });
+    if (rememberedBook) return rememberedBook;
   }
 
-  return BookRepository.listByProject(booksTable, project.id).pipe(
+  return yield* BookRepository.listByProject(booksTable, project.id).pipe(
     TaskArray.sortByString('position'),
     Task.map((activeBooks) => activeBooks[activeBooks.length - 1] ?? null),
   );
-}
+});
 
-function resolveRememberedScene(
+const resolveRememberedScene = Task.fn(function* (
   scenesTable: DbTypes.ScenesTable,
   book: DbTypes.LocalBook,
 ) {
   const rememberedId = book.last_visited_scene_id;
   if (rememberedId) {
-    return Task.gen(function* () {
-      const rememberedScene = yield* SceneRepository.get(
-        scenesTable,
-        rememberedId,
-      ).pipe(
-        Task.mapError(
-          () => new MissingSceneReferenceError(book.id, rememberedId),
-        ),
-      );
+    const sceneIsActiveAndInBook = (scene: DbTypes.LocalScene) =>
+      scene.deleted_at === null && scene.book_id === book.id;
 
-      if (rememberedScene.deleted_at !== null) {
-        return yield* Task.fail(
-          new MissingSceneReferenceError(book.id, rememberedId),
-        );
-      }
-      if (rememberedScene.book_id !== book.id) {
-        return yield* Task.fail(
-          new SceneNotInBookError(rememberedScene.id, book.id),
-        );
-      }
+    const rememberedScene = yield* SceneRepository.get(
+      scenesTable,
+      rememberedId,
+    ).pipe(
+      Task.filterOrElse(sceneIsActiveAndInBook, () => Task.succeed(null)),
+      Task.catchTag('sceneNotFound', () => Task.succeed(null)),
+    );
 
-      return rememberedScene;
-    });
+    if (rememberedScene) return rememberedScene;
   }
 
-  return SceneRepository.listByBook(scenesTable, book.id).pipe(
+  return yield* SceneRepository.listByBook(scenesTable, book.id).pipe(
     TaskArray.sortByString('position'),
     Task.map((activeScenes) => activeScenes[activeScenes.length - 1] ?? null),
   );
-}
+});
 
 function createEmptySelection(): WorkspaceSelection {
   return { projectId: null, bookId: null, sceneId: null };
