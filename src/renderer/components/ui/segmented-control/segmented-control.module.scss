@@ -8,7 +8,7 @@
 
 .btn {
   flex: 1;
-  color: var(--ink-3);
+  color: var(--text-muted);
   font-size: 12px;
   padding: 6px 4px;
   border-radius: var(--r-xs);
@@ -17,12 +17,12 @@
   align-items: center;
 
   &:hover {
-    color: var(--ink);
+    color: var(--text);
   }
 }
 
 .on {
   background: var(--bg);
-  color: var(--ink);
+  color: var(--text);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
 }

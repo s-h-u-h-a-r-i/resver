@@ -71,6 +71,7 @@ export default defineConfig({
     preprocessorOptions: {
       scss: {
         api: 'modern-compiler',
+        loadPaths: [fileURLToPath(new URL('./src/renderer/styles', import.meta.url))],
       },
     },
   },

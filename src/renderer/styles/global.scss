@@ -9,25 +9,48 @@
 @import '@fontsource/source-serif-4/600.css';
 @import '@fontsource/source-serif-4/600-italic.css';
 
+$theme-light: (
+  --bg: oklch(97.955% 0.0056 84.443),
+  --bg-tint: #f3efe7,
+  --line: #e6e0d5,
+  --accent: #9a6a4f,
+  --accent-soft: #efe4da,
+  --accent-secondary: #7d8a6f,
+  --shadow-elevated: 0 6px 22px rgba(40, 32, 20, 0.07),
+  --on-accent: #ffffff,
+);
+
+$theme-dark: (
+  --bg-dark: oklch(0.2 0.01 100),
+  --bg: oklch(0.21 0.01 100),
+  --bg-light: oklch(0.22 0.01 100),
+  --text: oklch(0.9 0.01 100),
+  --text-muted: oklch(0.6 0.01 100),
+  --line: oklch(0.3 0.01 100),
+  --accent: oklch(0.7 0.07 55),
+  --accent-soft: oklch(0.7 0.07 55 / 0.2),
+  --accent-secondary: oklch(0.7 0.04 120),
+  --shadow-elevated: 0 6px 22px oklch(0.2 0.01 100),
+  --on-accent: oklch(0.1 0.07 55),
+);
+
+@mixin theme-vars($theme) {
+  @each $prop, $value in $theme {
+    #{$prop}: $value;
+  }
+}
+
 /* Dark is the design's home; light is available via the toggle / OS preference. */
 :root {
-  --bg: #16150f;
-  --bg-tint: #1d1c14;
-  --ink: #e9e4d7;
-  --ink-2: #a49d8c;
-  --ink-3: #6f695a;
-  --line: #2a2820;
-  --accent: #c99a7a;
-  --accent-soft: #2a2318;
-  --accent-secondary: #9aa887;
-  --danger: #d98070;
-  --danger-strong: #c5584a;
+  @include theme-vars($theme-dark);
+
+  --danger: oklch(0.8 0.2 30 / 1);
+  --danger-strong: oklch(0.6 0.2 30 / 1);
+
   --serif:
     'Source Serif 4', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
     serif;
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --shadow-elevated: 0 6px 22px rgba(0, 0, 0, 0.2);
-  --on-accent: #201a10;
 
   /* one radius scale — everything sits on a step, nothing is bespoke.
      0 is reserved for ruled lines and hairlines, so straight always reads as "ink". */
@@ -53,48 +76,20 @@
   --z-modal: 60; /* confirmation dialogs, above everything else */
 }
 
+// system preference — applies when no explicit toggle has set data-theme
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #faf8f4;
-    --bg-tint: #f3efe7;
-    --ink: #23211d;
-    --ink-2: #6f6a60;
-    --ink-3: #a49d90;
-    --line: #e6e0d5;
-    --accent: #9a6a4f;
-    --accent-soft: #efe4da;
-    --accent-secondary: #7d8a6f;
-    --shadow-elevated: 0 6px 22px rgba(40, 32, 20, 0.07);
-    --on-accent: #ffffff;
+    @include theme-vars($theme-light);
   }
 }
 
+// explicit toggle — wins over system preference either direction
 :root[data-theme='light'] {
-  --bg: #faf8f4;
-  --bg-tint: #f3efe7;
-  --ink: #23211d;
-  --ink-2: #6f6a60;
-  --ink-3: #a49d90;
-  --line: #e6e0d5;
-  --accent: #9a6a4f;
-  --accent-soft: #efe4da;
-  --accent-secondary: #7d8a6f;
-  --shadow-elevated: 0 6px 22px rgba(40, 32, 20, 0.07);
-  --on-accent: #ffffff;
+  @include theme-vars($theme-light);
 }
 
 :root[data-theme='dark'] {
-  --bg: #16150f;
-  --bg-tint: #1d1c14;
-  --ink: #e9e4d7;
-  --ink-2: #a49d8c;
-  --ink-3: #6f695a;
-  --line: #2a2820;
-  --accent: #c99a7a;
-  --accent-soft: #2a2318;
-  --accent-secondary: #9aa887;
-  --shadow-elevated: 0 6px 22px rgba(0, 0, 0, 0.2);
-  --on-accent: #201a10;
+  @include theme-vars($theme-dark);
 }
 
 /* ── reset: the handful of browser defaults every project ends up fixing
@@ -151,8 +146,8 @@ button {
 
 /* ── app-specific defaults ── */
 body {
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--bg-dark);
+  color: var(--text);
   font-family: var(--serif);
   -webkit-font-smoothing: antialiased;
 }

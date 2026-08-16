@@ -3,7 +3,7 @@
   box-sizing: border-box;
   background: var(--bg);
   border: 1px solid var(--line);
-  color: var(--ink);
+  color: var(--text);
   border-radius: var(--r-sm);
   padding: 8px 10px;
   font-size: 15px;
@@ -21,6 +21,6 @@
   }
 
   &::placeholder {
-    color: var(--ink-3);
+    color: var(--text-muted);
   }
 }
